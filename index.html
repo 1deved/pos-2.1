@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Charlie Fast Food - POS</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <!-- Loader -->
+    <div class="loader-overlay" id="loader">
+      <div class="loader-content">
+        <div class="spinner"></div>
+        <p>Procesando orden...</p>
+      </div>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+      <div class="container">
+        <div class="header-content">
+          <div class="logo-section"><img src="logo.png" alt="Logo Charlie Fast Food" class="logo-image" style="width: 100px;"/></div>
+          <nav class="nav">
+            <button class="nav-btn active" id="btnOrden">Nueva Orden</button>
+            <button class="nav-btn" id="btnAdmin">Administración</button>
+          </nav>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="main-container">
+      <!-- Vista de Orden -->
+      <div class="view" id="vistaOrden">
+        <div class="container">
+          <div class="pos-layout">
+            <!-- Panel de Productos -->
+            <section class="products-panel">
+              <div class="panel-header">
+                <h2>Menú</h2>
+                <div class="category-filter" id="categoryFilter">
+                  <button class="category-btn active" data-category="all">
+                    Todos
+                  </button>
+                </div>
+              </div>
+
+              <div class="products-grid" id="productsGrid">
+                <!-- Los productos se cargarán dinámicamente -->
+              </div>
+            </section>
+
+            <!-- Panel de Carrito -->
+            <section class="cart-panel">
+              <div class="cart-header">
+                <h2>Orden Actual</h2>
+                <button class="btn-clear" id="btnClearCart">Limpiar</button>
+              </div>
+
+              <!-- Información del Cliente -->
+              <div class="customer-info">
+                <input
+                  type="text"
+                  id="customerName"
+                  placeholder="Nombre del cliente"
+                  class="input-field"
+                  required
+                />
+                <div class="order-type">
+                  <label class="radio-label">
+                    <input
+                      type="radio"
+                      name="orderType"
+                      value="local"
+                      checked
+                    />
+                    <span>Local</span>
+                  </label>
+                  <label class="radio-label">
+                    <input type="radio" name="orderType" value="domicilio" />
+                    <span>Domicilio</span>
+                  </label>
+                </div>
+                <!-- DESPUÉS de los radio buttons Local/Domicilio, AGREGAR: -->
+
+                <div id="deliveryFields" style="display: none">
+                  <input
+                    type="text"
+                    id="deliveryAddress"
+                    placeholder="Dirección de entrega"
+                    class="input-field"
+                  />
+                  <input
+                    type="number"
+                    id="deliveryCharge"
+                    placeholder="Valor domicilio"
+                    class="input-field"
+                    value="2000"
+                  />
+                </div>
+
+                <div class="payment-methods" style="margin-top: 10px">
+                  <label class="radio-label">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="Efectivo"
+                      checked
+                    />
+                    <span>Efectivo</span>
+                  </label>
+                  <label class="radio-label">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="Transferencia"
+                    />
+                    <span>Transferencia</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Items del Carrito -->
+              <div class="cart-items" id="cartItems">
+                <div class="empty-cart">
+                  <p>🛒 Carrito vacío</p>
+                  <span>Agrega productos para comenzar</span>
+                </div>
+              </div>
+
+              <!-- Total y Acciones -->
+              <div class="cart-footer">
+                <div class="total-section">
+                  <span class="total-label">Total:</span>
+                  <span class="total-amount" id="totalAmount">$0</span>
+                </div>
+                <button class="btn-primary btn-large" id="btnProcessOrder">
+                  Procesar Orden
+                </button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vista de Administración -->
+      <div class="view hidden" id="vistaAdmin">
+        <div class="container">
+          <div class="admin-layout">
+            <div class="admin-tabs">
+              <button class="tab-btn active" data-tab="productos">
+                Productos
+              </button>
+              <button class="tab-btn" data-tab="categorias">Categorías</button>
+              <button class="tab-btn" data-tab="ordenes">Órdenes</button>
+              <!-- AGREGAR ESTA LÍNEA -->
+            </div>
+
+
+            <!-- Tab de Productos -->
+            <div class="tab-content active" id="tabProductos">
+              <div class="admin-header">
+                <h2>Gestión de Productos</h2>
+                <button class="btn-primary" id="btnNewProduct">
+                  + Nuevo Producto
+                </button>
+              </div>
+              <div class="admin-table-container">
+                <table class="admin-table" id="productsTable">
+                  <thead>
+                    <tr>
+                      <th>Nombre</th>
+                      <th>Categoría</th>
+                      <th>Precio</th>
+                      <th>Descripción</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="productsTableBody">
+                    <!-- Los productos se cargarán dinámicamente -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Tab de Categorías -->
+            <div class="tab-content" id="tabCategorias">
+              <div class="admin-header">
+                <h2>Gestión de Categorías</h2>
+                <button class="btn-primary" id="btnNewCategory">
+                  + Nueva Categoría
+                </button>
+              </div>
+              <div class="categories-grid" id="categoriesGrid">
+                <!-- Las categorías se cargarán dinámicamente -->
+              </div>
+            </div>
+            <!-- Tab de Órdenes - AGREGAR TODO ESTO -->
+            <div class="tab-content" id="tabOrdenes">
+              
+
+              <div id="adminContent" style="display: block">
+                <div class="admin-header">
+                  <h2>Gestión de Órdenes</h2>
+                  <div style="display: flex; gap: 10px">
+                    <input
+                      type="date"
+                      id="filterDate"
+                      class="input-field"
+                      style="width: 160px"
+                    />
+                    <select
+                      id="filterPayment"
+                      class="input-field"
+                      style="width: 160px"
+                    >
+                      <option value="all">Todos los pagos</option>
+                      <option value="Efectivo">Efectivo</option>
+                      <option value="Transferencia">Transferencia</option>
+                    </select>
+                    <button onclick="loadOrdersAdmin()" class="btn-primary">
+                      Filtrar
+                    </button>
+                  </div>
+                </div>
+                <div class="admin-table-container">
+                  <table class="admin-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Fecha</th>
+                        <th>Cliente</th>
+                        <th>Tipo</th>
+                        <th>Dirección</th>
+                        <th>Pago</th>
+                        <th>Total</th>
+                        <th>Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody id="ordersTableBody">
+                      <tr>
+                        <td colspan="8" style="text-align: center">
+                          Cargando...
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Modal para agregar/editar producto -->
+    <div class="modal" id="modalProduct">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="modalProductTitle">Nuevo Producto</h3>
+          <button class="modal-close" onclick="closeModal('modalProduct')">
+            &times;
+          </button>
+        </div>
+        <form id="formProduct" class="modal-form">
+          <input type="hidden" id="productId" />
+          <div class="form-group">
+            <label>Nombre del Producto *</label>
+            <input type="text" id="productName" required class="input-field" />
+          </div>
+          <div class="form-group">
+            <label>Categoría *</label>
+            <select id="productCategory" required class="input-field">
+              <option value="">Seleccione una categoría</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Precio *</label>
+            <input
+              type="number"
+              id="productPrice"
+              required
+              class="input-field"
+              min="0"
+              step="1000"
+            />
+          </div>
+          <div class="form-group">
+            <label>Descripción</label>
+            <textarea
+              id="productDescription"
+              class="input-field"
+              rows="3"
+            ></textarea>
+          </div>
+          <div class="modal-actions">
+            <button
+              type="button"
+              class="btn-secondary"
+              onclick="closeModal('modalProduct')"
+            >
+              Cancelar
+            </button>
+            <button type="submit" class="btn-primary">Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal para agregar/editar categoría -->
+    <div class="modal" id="modalCategory">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="modalCategoryTitle">Nueva Categoría</h3>
+          <button class="modal-close" onclick="closeModal('modalCategory')">
+            &times;
+          </button>
+        </div>
+        <form id="formCategory" class="modal-form">
+          <input type="hidden" id="categoryId" />
+          <div class="form-group">
+            <label>Nombre de la Categoría *</label>
+            <input type="text" id="categoryName" required class="input-field" />
+          </div>
+          <div class="modal-actions">
+            <button
+              type="button"
+              class="btn-secondary"
+              onclick="closeModal('modalCategory')"
+            >
+              Cancelar
+            </button>
+            <button type="submit" class="btn-primary">Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal para agregar notas al producto -->
+    <div class="modal" id="modalNotes">
+      <div class="modal-content modal-small">
+        <div class="modal-header">
+          <h3>Agregar Notas</h3>
+          <button class="modal-close" onclick="closeModal('modalNotes')">
+            &times;
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="product-name-modal" id="notesProductName"></p>
+          <textarea
+            id="productNotes"
+            class="input-field"
+            rows="4"
+            placeholder="Ej: Sin lechuga, extra queso..."
+          ></textarea>
+        </div>
+        <div class="modal-actions">
+          <button
+            type="button"
+            class="btn-secondary"
+            onclick="closeModal('modalNotes')"
+          >
+            Cancelar
+          </button>
+          <button type="button" class="btn-primary" onclick="confirmNotes()">
+            Agregar al Carrito
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- La etiqueta SCRIPT debe ir JUSTO ANTES de cerrar el body -->
+    <script src="app.js"></script>
+  </body>
+</html>
