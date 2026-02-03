@@ -631,3 +631,4 @@ function createConfigSheet() {
   sheet.clear();
   sheet.appendRow(['ADMIN_USER', 'admin']);
   sheet.appendRow(['ADMIN_PASSWORD', 'charlie2025']);
+}
