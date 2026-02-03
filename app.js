@@ -418,58 +418,65 @@ async function processOrder() {
   const orderType = document.querySelector(
     'input[name="orderType"]:checked'
   ).value;
+  const paymentMethod = document.querySelector(
+    'input[name="paymentMethod"]:checked'
+  ).value;
 
-  // Validaciones
-  if (!customerName) {
-    showToast("Por favor ingrese el nombre del cliente", "error");
-    document.getElementById("customerName").focus();
-    return;
+  let address = "";
+  let deliveryCharge = 0;
+
+  if (orderType === "domicilio") {
+    address = document.getElementById("deliveryAddress").value.trim();
+    deliveryCharge =
+      parseInt(document.getElementById("deliveryCharge").value) || 0;
+
+    if (!address) {
+      showToast("Ingrese la dirección de entrega", "error");
+      return;
+    }
   }
 
-  if (state.cart.length === 0) {
-    showToast("El carrito está vacío", "error");
+  if (!customerName || state.cart.length === 0) {
+    showToast("Complete los datos", "error");
     return;
   }
 
   showLoader(true);
 
-  // Preparar datos de la orden
+  const subtotal = calculateTotal();
+  const total = subtotal + deliveryCharge;
+
   const orderData = {
     customerName,
     orderType,
+    address,
+    deliveryCharge,
+    paymentMethod,
     items: state.cart,
-    total: calculateTotal(),
+    subtotal,
+    total,
     date: new Date().toISOString(),
   };
 
-  // Enviar a Google Sheets
   const result = await fetchData("createOrder", orderData);
 
   if (result && result.success) {
-    // Imprimir facturas
     await printReceipts(result.orderNumber, orderData);
 
-    // Limpiar carrito y formulario
     state.cart = [];
     document.getElementById("customerName").value = "";
-    document.querySelector(
-      'input[name="orderType"][value="local"]'
-    ).checked = true;
+    document.getElementById("deliveryAddress").value = "";
+    document.getElementById("deliveryCharge").value = "";
     renderCart();
 
-    showToast(
-      `Orden #${result.orderNumber} procesada correctamente`,
-      "success"
-    );
-  } else {
-    showToast("Error al procesar la orden", "error");
+    showToast(`Orden #${result.orderNumber} procesada`, "success");
   }
 
   showLoader(false);
 }
 
 // ===================================
-// SISTEMA DE IMPRESIÓN
+// SISTEMA DE IMPRESIÓN - AJUSTADO PARA PAPEL 80MM
 // ===================================
 
 async function printReceipts(orderNumber, orderData) {
@@ -490,7 +497,17 @@ async function printReceipts(orderNumber, orderData) {
 }
 
 function generateReceiptContent(orderNumber, orderData) {
-  const { customerName, orderType, items, total, date } = orderData;
+  const {
+    customerName,
+    orderType,
+    address,
+    deliveryCharge,
+    paymentMethod,
+    items,
+    subtotal,
+    total,
+    date,
+  } = orderData;
   const now = new Date(date);
   const formattedDate = now.toLocaleDateString("es-CO", {
     day: "2-digit",
@@ -503,58 +520,62 @@ function generateReceiptContent(orderNumber, orderData) {
     hour12: true,
   });
 
-  // Función para centrar texto (40 caracteres)
+  // Función para centrar texto (48 caracteres para papel 80mm)
   const center = (text) => {
     const len = text.length;
-    const padding = Math.max(0, Math.floor((40 - len) / 2));
+    const padding = Math.max(0, Math.floor((48 - len) / 2));
     return " ".repeat(padding) + text;
   };
 
   let content = `
 ${center("CHARLIE FAST FOOD")}
-${"=".repeat(40)}
+${"=".repeat(48)}
 CLL 5A #1 C SUR - 48, Bellavista
 Tel: 324 2749206
 @charliefastfood
-${"=".repeat(40)}
+${"=".repeat(48)}
 
 Factura: ${String(orderNumber).padStart(3, "0")}
-Fecha: ${formattedDate}  ${formattedTime}
+Fecha: ${formattedDate} ${formattedTime}
 Cliente: ${customerName}
 Tipo: ${orderType.toUpperCase()}
+${address ? "Dirección: " + address : ""}
+Pago: ${paymentMethod}
 
-${"=".repeat(40)}
+${"=".repeat(48)}
 PRODUCTOS
-${"=".repeat(40)}
+${"=".repeat(48)}
 
 `;
 
   items.forEach((item) => {
-    // Nombre del producto
     content += `${item.name}\n`;
-
-    // Cantidad x Precio = Subtotal
     const qtyPrice = `${item.quantity} x ${formatPrice(item.price)}`;
-    const subtotal = formatPrice(item.price * item.quantity);
-    const spaces = 40 - qtyPrice.length - subtotal.length;
-    content += `${qtyPrice}${" ".repeat(spaces)}${subtotal}\n`;
-
-    // Notas si existen
+    const itemTotal = formatPrice(item.price * item.quantity);
+    content += `${qtyPrice}${" ".repeat(
+      48 - qtyPrice.length - itemTotal.length
+    )}${itemTotal}\n`;
     if (item.notes) {
-      // Dividir notas en líneas de máximo 36 caracteres
-      const noteLines = item.notes.match(/.{1,36}/g) || [item.notes];
-      noteLines.forEach((line) => {
-        content += `  * ${line}\n`;
+      item.notes.split(",").forEach((note) => {
+        content += `  * ${note.trim()}\n`;
       });
     }
     content += `\n`;
   });
 
-  content += `${"=".repeat(40)}\n`;
-  content += `TOTAL:${" ".repeat(34 - formatPrice(total).length)}${formatPrice(
+  content += `${"=".repeat(48)}\n`;
+  content += `Subtotal:${" ".repeat(
+    38 - formatPrice(subtotal).length
+  )}${formatPrice(subtotal)}\n`;
+  if (deliveryCharge > 0) {
+    content += `Domicilio:${" ".repeat(
+      37 - formatPrice(deliveryCharge).length
+    )}${formatPrice(deliveryCharge)}\n`;
+  }
+  content += `TOTAL:${" ".repeat(41 - formatPrice(total).length)}${formatPrice(
     total
   )}\n`;
-  content += `${"=".repeat(40)}\n\n`;
+  content += `${"=".repeat(48)}\n\n`;
   content += `${center("¡Gracias por su compra!")}\n`;
   content += `${center("Vuelve pronto")}\n\n\n`;
 
@@ -564,7 +585,7 @@ ${"=".repeat(40)}
 async function printToThermalPrinter(content, copy) {
   try {
     // Agregar encabezado de copia
-    const fullContent = `\n${copy}\n${"-".repeat(40)}\n${content}`;
+    const fullContent = `\n${copy}\n${"-".repeat(48)}\n${content}`;
 
     // Abrir ventana de impresión
     const printWindow = window.open("", "_blank", "width=300,height=600");
@@ -1010,7 +1031,6 @@ async function loadOrdersAdmin() {
   }
 }
 
-// Mostrar tabla de órdenes
 // Mostrar tabla de órdenes - VERSIÓN CORREGIDA
 function renderOrdersTable(orders) {
   const tbody = document.getElementById("ordersTableBody");
@@ -1138,152 +1158,6 @@ async function deleteOrderAdmin(orderNumber, rowIndex) {
     loadOrdersAdmin();
     showToast("Orden eliminada", "success");
   }
-}
-
-// Modificar processOrder para incluir nuevos campos
-async function processOrder() {
-  const customerName = document.getElementById("customerName").value.trim();
-  const orderType = document.querySelector(
-    'input[name="orderType"]:checked'
-  ).value;
-  const paymentMethod = document.querySelector(
-    'input[name="paymentMethod"]:checked'
-  ).value;
-
-  let address = "";
-  let deliveryCharge = 0;
-
-  if (orderType === "domicilio") {
-    address = document.getElementById("deliveryAddress").value.trim();
-    deliveryCharge =
-      parseInt(document.getElementById("deliveryCharge").value) || 0;
-
-    if (!address) {
-      showToast("Ingrese la dirección de entrega", "error");
-      return;
-    }
-  }
-
-  if (!customerName || state.cart.length === 0) {
-    showToast("Complete los datos", "error");
-    return;
-  }
-
-  showLoader(true);
-
-  const subtotal = calculateTotal();
-  const total = subtotal + deliveryCharge;
-
-  const orderData = {
-    customerName,
-    orderType,
-    address,
-    deliveryCharge,
-    paymentMethod,
-    items: state.cart,
-    subtotal,
-    total,
-    date: new Date().toISOString(),
-  };
-
-  const result = await fetchData("createOrder", orderData);
-
-  if (result && result.success) {
-    await printReceipts(result.orderNumber, orderData);
-
-    state.cart = [];
-    document.getElementById("customerName").value = "";
-    document.getElementById("deliveryAddress").value = "";
-    document.getElementById("deliveryCharge").value = "";
-    renderCart();
-
-    showToast(`Orden #${result.orderNumber} procesada`, "success");
-  }
-
-  showLoader(false);
-}
-
-// Actualizar factura con nuevos datos
-function generateReceiptContent(orderNumber, orderData) {
-  const {
-    customerName,
-    orderType,
-    address,
-    deliveryCharge,
-    paymentMethod,
-    items,
-    subtotal,
-    total,
-    date,
-  } = orderData;
-  const now = new Date(date);
-  const formattedDate = now.toLocaleDateString("es-CO", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-  const formattedTime = now.toLocaleTimeString("es-CO", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
-
-  const center = (text) => {
-    const padding = Math.max(0, Math.floor((40 - text.length) / 2));
-    return " ".repeat(padding) + text;
-  };
-
-  let content = `
-${center("CHARLIE FAST FOOD")}
-${"=".repeat(40)}
-CLL 5A #1 C SUR - 48, Bellavista
-Tel: 324 2749206
-${"=".repeat(40)}
-
-Factura: ${String(orderNumber).padStart(3, "0")}
-Fecha: ${formattedDate} ${formattedTime}
-Cliente: ${customerName}
-Tipo: ${orderType.toUpperCase()}
-${address ? "Dirección: " + address : ""}
-Pago: ${paymentMethod}
-
-${"=".repeat(40)}
-PRODUCTOS
-${"=".repeat(40)}
-
-`;
-
-  items.forEach((item) => {
-    content += `${item.name}\n`;
-    const qtyPrice = `${item.quantity} x ${formatPrice(item.price)}`;
-    const itemTotal = formatPrice(item.price * item.quantity);
-    content += `${qtyPrice}${" ".repeat(
-      40 - qtyPrice.length - itemTotal.length
-    )}${itemTotal}\n`;
-    if (item.notes) {
-      item.notes.split(",").forEach((note) => {
-        content += `  * ${note.trim()}\n`;
-      });
-    }
-    content += `\n`;
-  });
-
-  content += `${"=".repeat(40)}\n`;
-  content += `Subtotal:${" ".repeat(
-    30 - formatPrice(subtotal).length
-  )}${formatPrice(subtotal)}\n`;
-  if (deliveryCharge > 0) {
-    content += `Domicilio:${" ".repeat(
-      29 - formatPrice(deliveryCharge).length
-    )}${formatPrice(deliveryCharge)}\n`;
-  }
-  content += `TOTAL:${" ".repeat(33 - formatPrice(total).length)}${formatPrice(
-    total
-  )}\n`;
-  content += `${"=".repeat(40)}\n\n`;
-  content += `${center("¡Gracias por su compra!")}\n\n\n`;
-
-  return content;
 }
 
 // Inicializar al cargar
