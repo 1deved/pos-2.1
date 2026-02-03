@@ -38,70 +38,6 @@ body {
 }
 
 /* ===================================
-   LOGIN
-   =================================== */
-.login-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 60vh;
-    padding: 40px 0;
-}
-
-.login-box {
-    background: var(--light-bg);
-    border-radius: 20px;
-    padding: 40px;
-    max-width: 450px;
-    width: 100%;
-    box-shadow: 0 10px 40px var(--shadow-lg);
-    border: 2px solid var(--primary-yellow);
-}
-
-.login-box h2 {
-    color: var(--primary-yellow);
-    font-size: 28px;
-    text-align: center;
-    margin-bottom: 30px;
-    text-shadow: 2px 2px 4px var(--shadow-md);
-}
-
-.login-form {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-}
-
-.admin-header-with-logout {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    padding-bottom: 15px;
-    border-bottom: 2px solid var(--dark-bg);
-}
-
-.btn-logout {
-    padding: 10px 20px;
-    background: transparent;
-    border: 2px solid var(--danger);
-    color: var(--danger);
-    border-radius: 10px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    font-family: 'Poppins', sans-serif;
-}
-
-.btn-logout:hover {
-    background: var(--danger);
-    color: var(--white);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
-}
-
-/* ===================================
    LOADER
    =================================== */
 .loader-overlay {
@@ -1112,10 +1048,6 @@ body {
     
     .toast {
         min-width: auto;
-    }
-
-    .login-box {
-        padding: 30px 20px;
     }
 }
 
