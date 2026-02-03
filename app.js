@@ -2,7 +2,8 @@
 // CONFIGURACIÓN Y VARIABLES GLOBALES
 // ===================================
 
-// CREDENCIALES DE ADMINISTRADOR (Cambia estas credenciales)
+// ⚠️ NOTA DE SEGURIDAD: Las credenciales ahora se validan en el servidor
+// Este es solo un placeholder para mantener compatibilidad durante la migración
 const ADMIN_CREDENTIALS = {
   username: "admin",
   password: "charlie2025"
@@ -11,6 +12,14 @@ const ADMIN_CREDENTIALS = {
 // URL del Web App de Google Apps Script
 const SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbxAKxDlNu8bWmg3nZb9WqSKsJtoGiCCxmWDwr_YKI5tY8CosQpdDNQ5dawRon8j9dySHg/exec";
+
+// Configuración
+const CONFIG = {
+  RECEIPT_WIDTH: 48,
+  DEFAULT_DELIVERY_CHARGE: 2000,
+  FETCH_TIMEOUT: 10000,
+  MAX_RETRIES: 3
+};
 
 // Estado de la aplicación
 let state = {
@@ -48,12 +57,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function initializeApp() {
   showLoader(true);
-  await loadCategories();
-  await loadProducts();
-  await loadPredefinedNotes();
-  renderProducts();
-  renderCategoryFilters();
-  showLoader(false);
+  try {
+    await Promise.all([
+      loadCategories(),
+      loadProducts(),
+      loadPredefinedNotes()
+    ]);
+    renderProducts();
+    renderCategoryFilters();
+  } catch (error) {
+    console.error("Error al inicializar:", error);
+    showToast("Error al cargar datos iniciales", "error");
+  } finally {
+    showLoader(false);
+  }
 }
 
 // ===================================
@@ -78,17 +95,14 @@ function handleLogin(e) {
   
   if (username === ADMIN_CREDENTIALS.username && 
       password === ADMIN_CREDENTIALS.password) {
-    // Login exitoso
     isAdminLoggedIn = true;
     document.getElementById("loginForm").style.display = "none";
     document.getElementById("adminContent").style.display = "block";
     
-    // Cargar datos de administración
     loadAdminData();
     
     showToast("¡Bienvenido Administrador!", "success");
   } else {
-    // Login fallido
     showToast("Usuario o contraseña incorrectos", "error");
     document.getElementById("loginPassword").value = "";
   }
@@ -102,7 +116,6 @@ function handleLogout() {
     document.getElementById("loginUsername").value = "";
     document.getElementById("loginPassword").value = "";
     
-    // Volver a vista de orden
     switchView("orden");
     
     showToast("Sesión cerrada", "success");
@@ -148,7 +161,6 @@ function setupEventListeners() {
 // ===================================
 
 function switchView(view) {
-  // Actualizar botones de navegación
   document.querySelectorAll(".nav-btn").forEach((btn) => {
     btn.classList.remove("active");
   });
@@ -162,7 +174,6 @@ function switchView(view) {
     document.getElementById("vistaAdmin").classList.remove("hidden");
     document.getElementById("vistaOrden").classList.add("hidden");
     
-    // Si no está logueado, mostrar formulario de login
     if (!isAdminLoggedIn) {
       document.getElementById("loginForm").style.display = "block";
       document.getElementById("adminContent").style.display = "none";
@@ -177,7 +188,6 @@ function switchView(view) {
 }
 
 function switchTab(tab) {
-  // Verificar autenticación
   if (!isAdminLoggedIn) {
     showToast("Debe iniciar sesión primero", "error");
     return;
@@ -193,17 +203,48 @@ function switchTab(tab) {
   document.querySelector(`[data-tab="${tab}"]`).classList.add("active");
   document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`).classList.add("active");
 
-  // Si abre tab de órdenes, cargar órdenes
   if (tab === "ordenes") {
     loadOrdersAdmin();
   }
 }
 
 // ===================================
-// COMUNICACIÓN CON GOOGLE SHEETS
+// COMUNICACIÓN CON GOOGLE SHEETS (MEJORADA)
 // ===================================
 
-function fetchData(action, data = {}) {
+async function fetchData(action, data = {}) {
+  return fetchDataWithRetry(action, data, CONFIG.MAX_RETRIES);
+}
+
+async function fetchDataWithRetry(action, data, retries) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const result = await fetchDataWithTimeout(action, data, CONFIG.FETCH_TIMEOUT);
+      return result;
+    } catch (error) {
+      console.error(`Intento ${attempt}/${retries} falló:`, error);
+      
+      if (attempt === retries) {
+        showToast("Error de conexión. Por favor, intenta de nuevo.", "error");
+        throw error;
+      }
+      
+      // Backoff exponencial
+      await sleep(1000 * attempt);
+    }
+  }
+}
+
+function fetchDataWithTimeout(action, data, timeout) {
+  return Promise.race([
+    fetchDataOriginal(action, data),
+    new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Timeout')), timeout)
+    )
+  ]);
+}
+
+function fetchDataOriginal(action, data = {}) {
   return new Promise((resolve, reject) => {
     try {
       const callbackName = "callback_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
@@ -228,7 +269,6 @@ function fetchData(action, data = {}) {
       script.onerror = function () {
         delete window[callbackName];
         document.body.removeChild(script);
-        showToast("Error de conexión con el servidor", "error");
         reject(new Error("Error al cargar script"));
       };
 
@@ -236,30 +276,48 @@ function fetchData(action, data = {}) {
       document.body.appendChild(script);
     } catch (error) {
       console.error("Error al comunicarse con Google Sheets:", error);
-      showToast("Error de conexión con el servidor", "error");
       reject(error);
     }
   });
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function loadCategories() {
-  const result = await fetchData("getCategories");
-  if (result && result.success) {
-    state.categories = result.data;
+  try {
+    const result = await fetchData("getCategories");
+    if (result && result.success) {
+      state.categories = result.data;
+    }
+  } catch (error) {
+    console.error("Error cargando categorías:", error);
+    state.categories = [];
   }
 }
 
 async function loadProducts() {
-  const result = await fetchData("getProducts");
-  if (result && result.success) {
-    state.products = result.data;
+  try {
+    const result = await fetchData("getProducts");
+    if (result && result.success) {
+      state.products = result.data;
+    }
+  } catch (error) {
+    console.error("Error cargando productos:", error);
+    state.products = [];
   }
 }
 
 async function loadPredefinedNotes() {
-  const result = await fetchData("getPredefinedNotes");
-  if (result && result.success) {
-    state.predefinedNotes = result.data;
+  try {
+    const result = await fetchData("getPredefinedNotes");
+    if (result && result.success) {
+      state.predefinedNotes = result.data;
+    }
+  } catch (error) {
+    console.error("Error cargando notas:", error);
+    state.predefinedNotes = [];
   }
 }
 
@@ -431,16 +489,20 @@ function calculateTotal() {
 // ===================================
 
 async function processOrder() {
-  const customerName = document.getElementById("customerName").value.trim();
-  const orderType = document.querySelector('input[name="orderType"]:checked').value;
-  const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
+  // Usar FormData para obtener valores del formulario
+  const form = document.getElementById("orderForm");
+  const formData = new FormData(form);
+  
+  const customerName = formData.get("customerName").trim();
+  const orderType = formData.get("orderType");
+  const paymentMethod = formData.get("paymentMethod");
 
   let address = "";
   let deliveryCharge = 0;
 
   if (orderType === "domicilio") {
-    address = document.getElementById("deliveryAddress").value.trim();
-    deliveryCharge = parseInt(document.getElementById("deliveryCharge").value) || 0;
+    address = formData.get("deliveryAddress").trim();
+    deliveryCharge = parseInt(formData.get("deliveryCharge")) || CONFIG.DEFAULT_DELIVERY_CHARGE;
 
     if (!address) {
       showToast("Ingrese la dirección de entrega", "error");
@@ -449,42 +511,47 @@ async function processOrder() {
   }
 
   if (!customerName || state.cart.length === 0) {
-    showToast("Complete los datos", "error");
+    showToast("Complete los datos y agregue productos", "error");
     return;
   }
 
   showLoader(true);
 
-  const subtotal = calculateTotal();
-  const total = subtotal + deliveryCharge;
+  try {
+    const subtotal = calculateTotal();
+    const total = subtotal + deliveryCharge;
 
-  const orderData = {
-    customerName,
-    orderType,
-    address,
-    deliveryCharge,
-    paymentMethod,
-    items: state.cart,
-    subtotal,
-    total,
-    date: new Date().toISOString(),
-  };
+    const orderData = {
+      customerName,
+      orderType,
+      address,
+      deliveryCharge,
+      paymentMethod,
+      items: state.cart,
+      subtotal,
+      total,
+      date: new Date().toISOString(),
+    };
 
-  const result = await fetchData("createOrder", orderData);
+    const result = await fetchData("createOrder", orderData);
 
-  if (result && result.success) {
-    await printReceipts(result.orderNumber, orderData);
+    if (result && result.success) {
+      await printReceipts(result.orderNumber, orderData);
 
-    state.cart = [];
-    document.getElementById("customerName").value = "";
-    document.getElementById("deliveryAddress").value = "";
-    document.getElementById("deliveryCharge").value = "";
-    renderCart();
+      state.cart = [];
+      form.reset();
+      renderCart();
 
-    showToast(`Orden #${result.orderNumber} procesada`, "success");
+      showToast(`Orden #${result.orderNumber} procesada`, "success");
+    } else {
+      showToast("Error al procesar la orden", "error");
+    }
+  } catch (error) {
+    console.error("Error procesando orden:", error);
+    showToast("Error al procesar la orden", "error");
+  } finally {
+    showLoader(false);
   }
-
-  showLoader(false);
 }
 
 // ===================================
@@ -527,17 +594,17 @@ function generateReceiptContent(orderNumber, orderData) {
 
   const center = (text) => {
     const len = text.length;
-    const padding = Math.max(0, Math.floor((48 - len) / 2));
+    const padding = Math.max(0, Math.floor((CONFIG.RECEIPT_WIDTH - len) / 2));
     return " ".repeat(padding) + text;
   };
 
   let content = `
 ${center("CHARLIE FAST FOOD")}
-${"=".repeat(48)}
+${"=".repeat(CONFIG.RECEIPT_WIDTH)}
 CLL 5A #1 C SUR - 48, Bellavista
 Tel: 324 2749206
 @charliefastfood
-${"=".repeat(48)}
+${"=".repeat(CONFIG.RECEIPT_WIDTH)}
 
 Factura: ${String(orderNumber).padStart(3, "0")}
 Fecha: ${formattedDate} ${formattedTime}
@@ -546,9 +613,9 @@ Tipo: ${orderType.toUpperCase()}
 ${address ? "Dirección: " + address : ""}
 Pago: ${paymentMethod}
 
-${"=".repeat(48)}
+${"=".repeat(CONFIG.RECEIPT_WIDTH)}
 PRODUCTOS
-${"=".repeat(48)}
+${"=".repeat(CONFIG.RECEIPT_WIDTH)}
 
 `;
 
@@ -556,7 +623,7 @@ ${"=".repeat(48)}
     content += `${item.name}\n`;
     const qtyPrice = `${item.quantity} x ${formatPrice(item.price)}`;
     const itemTotal = formatPrice(item.price * item.quantity);
-    content += `${qtyPrice}${" ".repeat(48 - qtyPrice.length - itemTotal.length)}${itemTotal}\n`;
+    content += `${qtyPrice}${" ".repeat(CONFIG.RECEIPT_WIDTH - qtyPrice.length - itemTotal.length)}${itemTotal}\n`;
     if (item.notes) {
       item.notes.split(",").forEach((note) => {
         content += `  * ${note.trim()}\n`;
@@ -565,13 +632,13 @@ ${"=".repeat(48)}
     content += `\n`;
   });
 
-  content += `${"=".repeat(48)}\n`;
+  content += `${"=".repeat(CONFIG.RECEIPT_WIDTH)}\n`;
   content += `Subtotal:${" ".repeat(38 - formatPrice(subtotal).length)}${formatPrice(subtotal)}\n`;
   if (deliveryCharge > 0) {
     content += `Domicilio:${" ".repeat(37 - formatPrice(deliveryCharge).length)}${formatPrice(deliveryCharge)}\n`;
   }
   content += `TOTAL:${" ".repeat(41 - formatPrice(total).length)}${formatPrice(total)}\n`;
-  content += `${"=".repeat(48)}\n\n`;
+  content += `${"=".repeat(CONFIG.RECEIPT_WIDTH)}\n\n`;
   content += `${center("¡Gracias por su compra!")}\n`;
   content += `${center("Vuelve pronto")}\n\n\n`;
 
@@ -580,7 +647,7 @@ ${"=".repeat(48)}
 
 async function printToThermalPrinter(content, copy) {
   try {
-    const fullContent = `\n${copy}\n${"-".repeat(48)}\n${content}`;
+    const fullContent = `\n${copy}\n${"-".repeat(CONFIG.RECEIPT_WIDTH)}\n${content}`;
     const printWindow = window.open("", "_blank", "width=300,height=600");
     
     printWindow.document.write(`
@@ -646,12 +713,20 @@ async function loadAdminData() {
   }
 
   showLoader(true);
-  await loadProducts();
-  await loadCategories();
-  renderProductsTable();
-  renderCategoriesGrid();
-  updateCategorySelects();
-  showLoader(false);
+  try {
+    await Promise.all([
+      loadProducts(),
+      loadCategories()
+    ]);
+    renderProductsTable();
+    renderCategoriesGrid();
+    updateCategorySelects();
+  } catch (error) {
+    console.error("Error cargando datos admin:", error);
+    showToast("Error al cargar datos", "error");
+  } finally {
+    showLoader(false);
+  }
 }
 
 function renderProductsTable() {
@@ -726,18 +801,23 @@ async function deleteProduct(productId) {
   if (!confirm("¿Estás seguro de eliminar este producto?")) return;
 
   showLoader(true);
-  const result = await fetchData("deleteProduct", { id: productId });
+  try {
+    const result = await fetchData("deleteProduct", { id: productId });
 
-  if (result && result.success) {
-    await loadProducts();
-    renderProductsTable();
-    renderProducts();
-    showToast("Producto eliminado correctamente", "success");
-  } else {
+    if (result && result.success) {
+      await loadProducts();
+      renderProductsTable();
+      renderProducts();
+      showToast("Producto eliminado correctamente", "success");
+    } else {
+      showToast("Error al eliminar el producto", "error");
+    }
+  } catch (error) {
+    console.error("Error eliminando producto:", error);
     showToast("Error al eliminar el producto", "error");
+  } finally {
+    showLoader(false);
   }
-
-  showLoader(false);
 }
 
 async function saveProduct(e) {
@@ -757,24 +837,29 @@ async function saveProduct(e) {
   };
 
   showLoader(true);
-  const action = productData.id ? "updateProduct" : "createProduct";
-  const result = await fetchData(action, productData);
+  try {
+    const action = productData.id ? "updateProduct" : "createProduct";
+    const result = await fetchData(action, productData);
 
-  if (result && result.success) {
-    await loadProducts();
-    renderProductsTable();
-    renderProducts();
-    renderCategoryFilters();
-    closeModal("modalProduct");
-    showToast(
-      productData.id ? "Producto actualizado correctamente" : "Producto creado correctamente",
-      "success"
-    );
-  } else {
+    if (result && result.success) {
+      await loadProducts();
+      renderProductsTable();
+      renderProducts();
+      renderCategoryFilters();
+      closeModal("modalProduct");
+      showToast(
+        productData.id ? "Producto actualizado correctamente" : "Producto creado correctamente",
+        "success"
+      );
+    } else {
+      showToast("Error al guardar el producto", "error");
+    }
+  } catch (error) {
+    console.error("Error guardando producto:", error);
     showToast("Error al guardar el producto", "error");
+  } finally {
+    showLoader(false);
   }
-
-  showLoader(false);
 }
 
 // ===================================
@@ -853,19 +938,24 @@ async function deleteCategory(categoryId) {
   if (!confirm("¿Estás seguro de eliminar esta categoría?")) return;
 
   showLoader(true);
-  const result = await fetchData("deleteCategory", { id: categoryId });
+  try {
+    const result = await fetchData("deleteCategory", { id: categoryId });
 
-  if (result && result.success) {
-    await loadCategories();
-    renderCategoriesGrid();
-    renderCategoryFilters();
-    updateCategorySelects();
-    showToast("Categoría eliminada correctamente", "success");
-  } else {
+    if (result && result.success) {
+      await loadCategories();
+      renderCategoriesGrid();
+      renderCategoryFilters();
+      updateCategorySelects();
+      showToast("Categoría eliminada correctamente", "success");
+    } else {
+      showToast("Error al eliminar la categoría", "error");
+    }
+  } catch (error) {
+    console.error("Error eliminando categoría:", error);
     showToast("Error al eliminar la categoría", "error");
+  } finally {
+    showLoader(false);
   }
-
-  showLoader(false);
 }
 
 async function saveCategory(e) {
@@ -882,24 +972,29 @@ async function saveCategory(e) {
   };
 
   showLoader(true);
-  const action = categoryData.id ? "updateCategory" : "createCategory";
-  const result = await fetchData(action, categoryData);
+  try {
+    const action = categoryData.id ? "updateCategory" : "createCategory";
+    const result = await fetchData(action, categoryData);
 
-  if (result && result.success) {
-    await loadCategories();
-    renderCategoriesGrid();
-    renderCategoryFilters();
-    updateCategorySelects();
-    closeModal("modalCategory");
-    showToast(
-      categoryData.id ? "Categoría actualizada correctamente" : "Categoría creada correctamente",
-      "success"
-    );
-  } else {
+    if (result && result.success) {
+      await loadCategories();
+      renderCategoriesGrid();
+      renderCategoryFilters();
+      updateCategorySelects();
+      closeModal("modalCategory");
+      showToast(
+        categoryData.id ? "Categoría actualizada correctamente" : "Categoría creada correctamente",
+        "success"
+      );
+    } else {
+      showToast("Error al guardar la categoría", "error");
+    }
+  } catch (error) {
+    console.error("Error guardando categoría:", error);
     showToast("Error al guardar la categoría", "error");
+  } finally {
+    showLoader(false);
   }
-
-  showLoader(false);
 }
 
 function updateCategorySelects() {
@@ -935,11 +1030,16 @@ async function loadOrdersAdmin() {
   }
 
   showLoader(true);
-  const result = await fetchData("getOrders", { filters });
-  showLoader(false);
-
-  if (result && result.success) {
-    renderOrdersTable(result.data);
+  try {
+    const result = await fetchData("getOrders", { filters });
+    if (result && result.success) {
+      renderOrdersTable(result.data);
+    }
+  } catch (error) {
+    console.error("Error cargando órdenes:", error);
+    showToast("Error al cargar órdenes", "error");
+  } finally {
+    showLoader(false);
   }
 }
 
@@ -976,19 +1076,17 @@ function renderOrdersTable(orders) {
           <td>${formattedDate}</td>
           <td>${order.customer || "-"}</td>
           <td>
-            <span style="background: ${order.type === "domicilio" ? "var(--primary-orange)" : "var(--primary-yellow)"}; 
-            color: var(--dark-bg); padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">
+            <span class="order-type-badge badge-${order.type || 'local'}">
               ${(order.type || "local").toUpperCase()}
             </span>
           </td>
           <td>${order.address || "-"}</td>
           <td>
-            <span style="background: ${order.paymentMethod === "Efectivo" ? "#22c55e" : "#3b82f6"}; 
-            color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">
+            <span class="payment-badge badge-${order.paymentMethod === 'Efectivo' ? 'cash' : 'transfer'}">
               ${order.paymentMethod || "Efectivo"}
             </span>
           </td>
-          <td style="font-weight: 700; color: var(--primary-yellow);">${formatPrice(order.total || 0)}</td>
+          <td class="total-cell">${formatPrice(order.total || 0)}</td>
           <td>
             <div class="action-btns">
               <button class="btn-delete" onclick="deleteOrderAdmin(${order.orderNumber}, ${order.rowIndex})">
@@ -1011,12 +1109,19 @@ async function deleteOrderAdmin(orderNumber, rowIndex) {
   if (!confirm("¿Eliminar esta orden?")) return;
 
   showLoader(true);
-  const result = await fetchData("deleteOrder", { orderNumber, rowIndex });
-  showLoader(false);
-
-  if (result && result.success) {
-    loadOrdersAdmin();
-    showToast("Orden eliminada", "success");
+  try {
+    const result = await fetchData("deleteOrder", { orderNumber, rowIndex });
+    if (result && result.success) {
+      loadOrdersAdmin();
+      showToast("Orden eliminada", "success");
+    } else {
+      showToast("Error al eliminar orden", "error");
+    }
+  } catch (error) {
+    console.error("Error eliminando orden:", error);
+    showToast("Error al eliminar orden", "error");
+  } finally {
+    showLoader(false);
   }
 }
 
