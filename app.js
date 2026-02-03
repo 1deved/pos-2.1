@@ -1,1204 +1,634 @@
 // ===================================
-// CONFIGURACIÓN Y VARIABLES GLOBALES
+// GOOGLE APPS SCRIPT - CHARLIE FAST FOOD
+// VERSIÓN FINAL - GET ONLY (EVITA CORS)
 // ===================================
 
-// URL del Web App de Google Apps Script (REEMPLAZAR CON LA URL REAL)
-const SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbxAKxDlNu8bWmg3nZb9WqSKsJtoGiCCxmWDwr_YKI5tY8CosQpdDNQ5dawRon8j9dySHg/exec";
+function doGet(e) {
+  try {
+    const params = e.parameter;
+    const action = params.action;
+    const callback = params.callback; // Para JSONP
 
-// Estado de la aplicación
-let state = {
-  products: [],
-  categories: [],
-  cart: [],
-  currentView: "orden",
-  selectedCategory: "all",
-  tempProduct: null,
-};
+    // Si hay un parámetro 'data' con JSON, parsearlo
+    let data = {};
+    if (params.data) {
+      try {
+        data = JSON.parse(params.data);
+      } catch (err) {
+        data = params;
+      }
+    } else {
+      data = params;
+    }
+
+    let response;
+
+    switch (action) {
+      case 'getCategories':
+        response = { success: true, data: getCategories() };
+        break;
+
+      case 'getProducts':
+        response = { success: true, data: getProducts() };
+        break;
+
+      case 'createCategory':
+        response = createCategory(data);
+        break;
+
+      case 'updateCategory':
+        response = updateCategory(data);
+        break;
+
+      case 'deleteCategory':
+        response = deleteCategory(data);
+        break;
+
+      case 'createProduct':
+        response = createProduct(data);
+        break;
+
+      case 'updateProduct':
+        response = updateProduct(data);
+        break;
+
+      case 'deleteProduct':
+        response = deleteProduct(data);
+        break;
+
+      case 'createOrder':
+        response = createOrder(data);
+        break;
+
+      case 'login':
+        response = validateLogin(data);
+        break;
+      case 'getPredefinedNotes':
+        response = { success: true, data: getPredefinedNotes() };
+        break;
+      case 'addPredefinedNote':
+        response = addPredefinedNote(data);
+        break;
+      case 'deletePredefinedNote':
+        response = deletePredefinedNote(data);
+        break;
+      case 'getOrders':
+        response = { success: true, data: getOrders(data.filters) };
+        break;
+      case 'updateOrder':
+        response = updateOrder(data);
+        break;
+      case 'deleteOrder':
+        response = deleteOrder(data);
+        break;
+
+      default:
+        response = {
+          success: true,
+          message: 'Charlie Fast Food POS API funcionando',
+          timestamp: new Date().toISOString()
+        };
+    }
+
+    // Si hay callback (JSONP), devolver como función JavaScript
+    if (callback) {
+      return ContentService
+        .createTextOutput(callback + '(' + JSON.stringify(response) + ')')
+        .setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
+
+    // Si no hay callback, devolver JSON normal
+    return ContentService
+      .createTextOutput(JSON.stringify(response))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch (error) {
+    const errorResponse = { success: false, error: error.toString() };
+
+    if (e.parameter.callback) {
+      return ContentService
+        .createTextOutput(e.parameter.callback + '(' + JSON.stringify(errorResponse) + ')')
+        .setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
+
+    return ContentService
+      .createTextOutput(JSON.stringify(errorResponse))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  Logger.log("doGet recibido. action=%s, params=%s", action, JSON.stringify(params));
+
+}
+
+// También mantener doPost por compatibilidad
+function doPost(e) {
+
+  Logger.log("⚡ doGet PARAMS: " + JSON.stringify(e.parameter));
+  try {
+    const data = JSON.parse(e.postData.contents);
+    const action = data.action;
+    let response;
+
+    switch (action) {
+      case 'getCategories':
+        response = { success: true, data: getCategories() };
+        break;
+
+      case 'getProducts':
+        response = { success: true, data: getProducts() };
+        break;
+
+      case 'createCategory':
+        response = createCategory(data);
+        break;
+
+      case 'updateCategory':
+        response = updateCategory(data);
+        break;
+
+      case 'deleteCategory':
+        response = deleteCategory(data);
+        break;
+
+      case 'createProduct':
+        response = createProduct(data);
+        break;
+
+      case 'updateProduct':
+        response = updateProduct(data);
+        break;
+
+      case 'deleteProduct':
+        response = deleteProduct(data);
+        break;
+
+      case 'createOrder':
+        response = createOrder(data);
+        break;
+
+      case 'getOrders':
+        response = { success: true, data: getOrders() };
+        break;
+
+      default:
+        response = { success: true, message: 'API funcionando' };
+    }
+
+    return ContentService
+      .createTextOutput(JSON.stringify(response))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch (error) {
+    return ContentService
+      .createTextOutput(JSON.stringify({
+        success: false,
+        error: error.toString()
+      }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  Logger.log("⚡ doGet DATA: " + JSON.stringify(data));
+}
 
 // ===================================
 // INICIALIZACIÓN
 // ===================================
 
-document.addEventListener("DOMContentLoaded", () => {
-  initializeApp();
-  setupEventListeners();
-  // Buscar esta línea:
-  document.querySelectorAll(".tab-btn").forEach((btn) => {
-    btn.addEventListener("click", (e) => switchTab(e.target.dataset.tab));
-  });
-
-  // Y ASEGURARSE que switchTab esté así:
-  function switchTab(tab) {
-    document.querySelectorAll(".tab-btn").forEach((btn) => {
-      btn.classList.remove("active");
-    });
-    document.querySelectorAll(".tab-content").forEach((content) => {
-      content.classList.remove("active");
-    });
-
-    document.querySelector(`[data-tab="${tab}"]`).classList.add("active");
-    const tabId = "tab" + tab.charAt(0).toUpperCase() + tab.slice(1);
-    document.getElementById(tabId).classList.add("active");
-
-    // Si abre tab de órdenes y ya está logueado, cargar órdenes
-    if (tab === "ordenes" && isAdminLoggedIn) {
-      loadOrdersAdmin();
-    }
-  }
-});
-
-// --- EVENTOS PARA MOSTRAR VISTA ORDEN Y ADMIN --- //
-document.getElementById("btnAdmin").addEventListener("click", () => {
-  document.getElementById("vistaOrden").classList.add("hidden");
-  document.getElementById("vistaAdmin").classList.remove("hidden");
-
-  document.getElementById("btnAdmin").classList.add("active");
-  document.getElementById("btnOrden").classList.remove("active");
-
-  // Mostrar login primero
-  document.getElementById("loginForm").style.display = "block";
-  document.getElementById("adminContent").style.display = "none";
-});
-
-document.getElementById("btnOrden").addEventListener("click", () => {
-  document.getElementById("vistaAdmin").classList.add("hidden");
-  document.getElementById("vistaOrden").classList.remove("hidden");
-
-  document.getElementById("btnOrden").classList.add("active");
-  document.getElementById("btnAdmin").classList.remove("active");
-});
-
-async function initializeApp() {
-  showLoader(true);
-  await loadCategories();
-  await loadProducts();
-  renderProducts();
-  renderCategoryFilters();
-  showLoader(false);
-}
-
-// ===================================
-// EVENT LISTENERS
-// ===================================
-
-function setupEventListeners() {
-  // Navegación
-  document
-    .getElementById("btnOrden")
-    .addEventListener("click", () => switchView("orden"));
-  document
-    .getElementById("btnAdmin")
-    .addEventListener("click", () => switchView("admin"));
-
-  // Carrito
-  document.getElementById("btnClearCart").addEventListener("click", clearCart);
-  document
-    .getElementById("btnProcessOrder")
-    .addEventListener("click", processOrder);
-
-  // Administración - Tabs
-  document.querySelectorAll(".tab-btn").forEach((btn) => {
-    btn.addEventListener("click", (e) => switchTab(e.target.dataset.tab));
-  });
-
-  // Administración - Botones
-  document
-    .getElementById("btnNewProduct")
-    .addEventListener("click", () => openProductModal());
-  document
-    .getElementById("btnNewCategory")
-    .addEventListener("click", () => openCategoryModal());
-
-  // Formularios
-  document
-    .getElementById("formProduct")
-    .addEventListener("submit", saveProduct);
-  document
-    .getElementById("formCategory")
-    .addEventListener("submit", saveCategory);
-
-  // Filtros de categoría
-  document.getElementById("categoryFilter").addEventListener("click", (e) => {
-    if (e.target.classList.contains("category-btn")) {
-      filterByCategory(e.target.dataset.category);
-    }
-  });
-}
-
-// ===================================
-// NAVEGACIÓN Y VISTAS
-// ===================================
-
-function switchView(view) {
-  // Actualizar botones de navegación
-  document.querySelectorAll(".nav-btn").forEach((btn) => {
-    btn.classList.remove("active");
-  });
-
-  if (view === "orden") {
-    document.getElementById("btnOrden").classList.add("active");
-    document.getElementById("vistaOrden").classList.add("active");
-    document.getElementById("vistaAdmin").classList.remove("active");
-  } else {
-    document.getElementById("btnAdmin").classList.add("active");
-    document.getElementById("vistaAdmin").classList.add("active");
-    document.getElementById("vistaOrden").classList.remove("active");
-    loadAdminData();
-  }
-
-  state.currentView = view;
-}
-
-function switchTab(tab) {
-  document.querySelectorAll(".tab-btn").forEach((btn) => {
-    btn.classList.remove("active");
-  });
-  document.querySelectorAll(".tab-content").forEach((content) => {
-    content.classList.remove("active");
-  });
-
-  document.querySelector(`[data-tab="${tab}"]`).classList.add("active");
-  document
-    .getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`)
-    .classList.add("active");
-}
-
-// ===================================
-// COMUNICACIÓN CON GOOGLE SHEETS
-// ===================================
-
-function fetchData(action, data = {}) {
-  return new Promise((resolve, reject) => {
-    try {
-      // Crear nombre único para el callback
-      const callbackName =
-        "callback_" +
-        Date.now() +
-        "_" +
-        Math.random().toString(36).substr(2, 9);
-
-      // Construir parámetros
-      const params = new URLSearchParams({
-        action: action,
-        callback: callbackName,
-      });
-
-      // Para datos complejos, usar JSON
-      if (Object.keys(data).length > 0) {
-        params.set("data", JSON.stringify(data));
-      }
-
-      // Crear script tag para JSONP
-      const script = document.createElement("script");
-      const url = `${SCRIPT_URL}?${params.toString()}`;
-
-      // Definir callback global
-      window[callbackName] = function (response) {
-        // Limpiar
-        delete window[callbackName];
-        document.body.removeChild(script);
-
-        // Resolver promesa
-        resolve(response);
-      };
-
-      // Manejar errores
-      script.onerror = function () {
-        delete window[callbackName];
-        document.body.removeChild(script);
-        showToast("Error de conexión con el servidor", "error");
-        reject(new Error("Error al cargar script"));
-      };
-
-      // Agregar script al DOM
-      script.src = url;
-      document.body.appendChild(script);
-    } catch (error) {
-      console.error("Error al comunicarse con Google Sheets:", error);
-      showToast("Error de conexión con el servidor", "error");
-      reject(error);
-    }
-  });
-}
-
-async function loadCategories() {
-  const result = await fetchData("getCategories");
-  if (result && result.success) {
-    state.categories = result.data;
-  }
-}
-
-async function loadProducts() {
-  const result = await fetchData("getProducts");
-  if (result && result.success) {
-    state.products = result.data;
-  }
-}
-
-// ===================================
-// RENDERIZADO DE PRODUCTOS
-// ===================================
-
-function renderProducts() {
-  const grid = document.getElementById("productsGrid");
-  const filteredProducts =
-    state.selectedCategory === "all"
-      ? state.products
-      : state.products.filter((p) => p.category === state.selectedCategory);
-
-  if (filteredProducts.length === 0) {
-    grid.innerHTML =
-      '<div class="empty-cart"><p>📦</p><span>No hay productos disponibles</span></div>';
-    return;
-  }
-
-  grid.innerHTML = filteredProducts
-    .map(
-      (product) => `
-        <div class="product-card" onclick="addToCart('${product.id}')">
-            <h3>${product.name}</h3>
-            <div class="product-price">${formatPrice(product.price)}</div>
-            ${
-              product.description
-                ? `<p class="product-description">${product.description}</p>`
-                : ""
-            }
-        </div>
-    `
-    )
-    .join("");
-}
-
-function renderCategoryFilters() {
-  const filterContainer = document.getElementById("categoryFilter");
-
-  const buttons = [
-    '<button class="category-btn active" data-category="all">Todos</button>',
-    ...state.categories.map(
-      (cat) =>
-        `<button class="category-btn" data-category="${cat.name}">${cat.name}</button>`
-    ),
-  ].join("");
-
-  filterContainer.innerHTML = buttons;
-}
-
-function filterByCategory(category) {
-  state.selectedCategory = category;
-
-  document.querySelectorAll(".category-btn").forEach((btn) => {
-    btn.classList.remove("active");
-  });
-  document
-    .querySelector(`[data-category="${category}"]`)
-    .classList.add("active");
-
-  renderProducts();
-}
-
-// ===================================
-// GESTIÓN DEL CARRITO
-// ===================================
-
-function addToCart(productId) {
-  const product = state.products.find((p) => p.id === productId);
-  if (!product) return;
-
-  // Guardar producto temporal y abrir modal de notas
-  state.tempProduct = { ...product, quantity: 1, notes: "" };
-  openNotesModal(product);
-}
-
-function confirmNotes() {
-  const notes = document.getElementById("productNotes").value.trim();
-  state.tempProduct.notes = notes;
-
-  // Verificar si el producto ya está en el carrito (mismo producto y mismas notas)
-  const existingItem = state.cart.find(
-    (item) => item.id === state.tempProduct.id && item.notes === notes
-  );
-
-  if (existingItem) {
-    existingItem.quantity++;
-  } else {
-    state.cart.push({ ...state.tempProduct });
-  }
-
-  renderCart();
-  closeModal("modalNotes");
-  document.getElementById("productNotes").value = "";
-  showToast("Producto agregado al carrito", "success");
-}
-
-function updateQuantity(index, change) {
-  const item = state.cart[index];
-  item.quantity += change;
-
-  if (item.quantity <= 0) {
-    removeFromCart(index);
-  } else {
-    renderCart();
-  }
-}
-
-function removeFromCart(index) {
-  state.cart.splice(index, 1);
-  renderCart();
-  showToast("Producto eliminado", "success");
-}
-
-function clearCart() {
-  if (state.cart.length === 0) return;
-
-  if (confirm("¿Estás seguro de limpiar el carrito?")) {
-    state.cart = [];
-    renderCart();
-    showToast("Carrito limpiado", "success");
-  }
-}
-
-function renderCart() {
-  const cartContainer = document.getElementById("cartItems");
-  const totalElement = document.getElementById("totalAmount");
-
-  if (state.cart.length === 0) {
-    cartContainer.innerHTML = `
-            <div class="empty-cart">
-                <p>🛒</p>
-                <span>Carrito vacío</span>
-            </div>
-        `;
-    totalElement.textContent = "$0";
-    return;
-  }
-
-  cartContainer.innerHTML = state.cart
-    .map(
-      (item, index) => `
-        <div class="cart-item">
-            <div class="cart-item-header">
-                <span class="cart-item-name">${item.name}</span>
-                <button class="cart-item-remove" onclick="removeFromCart(${index})">×</button>
-            </div>
-            ${
-              item.notes
-                ? `<div class="cart-item-notes">📝 ${item.notes}</div>`
-                : ""
-            }
-            <div class="cart-item-footer">
-                <div class="quantity-controls">
-                    <button class="qty-btn" onclick="updateQuantity(${index}, -1)">-</button>
-                    <span class="qty-display">${item.quantity}</span>
-                    <button class="qty-btn" onclick="updateQuantity(${index}, 1)">+</button>
-                </div>
-                <span class="cart-item-price">${formatPrice(
-                  item.price * item.quantity
-                )}</span>
-            </div>
-        </div>
-    `
-    )
-    .join("");
-
-  const total = calculateTotal();
-  totalElement.textContent = formatPrice(total);
-}
-
-function calculateTotal() {
-  return state.cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-}
-
-// ===================================
-// PROCESAR ORDEN
-// ===================================
-
-async function processOrder() {
-  const customerName = document.getElementById("customerName").value.trim();
-  const orderType = document.querySelector(
-    'input[name="orderType"]:checked'
-  ).value;
-  const paymentMethod = document.querySelector(
-    'input[name="paymentMethod"]:checked'
-  ).value;
-
-  let address = "";
-  let deliveryCharge = 0;
-
-  if (orderType === "domicilio") {
-    address = document.getElementById("deliveryAddress").value.trim();
-    deliveryCharge =
-      parseInt(document.getElementById("deliveryCharge").value) || 0;
-
-    if (!address) {
-      showToast("Ingrese la dirección de entrega", "error");
-      return;
-    }
-  }
-
-  if (!customerName || state.cart.length === 0) {
-    showToast("Complete los datos", "error");
-    return;
-  }
-
-  showLoader(true);
-
-  const subtotal = calculateTotal();
-  const total = subtotal + deliveryCharge;
-
-  const orderData = {
-    customerName,
-    orderType,
-    address,
-    deliveryCharge,
-    paymentMethod,
-    items: state.cart,
-    subtotal,
-    total,
-    date: new Date().toISOString(),
-  };
-
-  const result = await fetchData("createOrder", orderData);
-
-  if (result && result.success) {
-    await printReceipts(result.orderNumber, orderData);
-
-    state.cart = [];
-    document.getElementById("customerName").value = "";
-    document.getElementById("deliveryAddress").value = "";
-    document.getElementById("deliveryCharge").value = "";
-    renderCart();
-
-    showToast(`Orden #${result.orderNumber} procesada`, "success");
-  }
-
-  showLoader(false);
-}
-
-// ===================================
-// SISTEMA DE IMPRESIÓN - AJUSTADO PARA PAPEL 80MM
-// ===================================
-
-async function printReceipts(orderNumber, orderData) {
-  // Generar contenido de la factura
-  const receiptContent = generateReceiptContent(orderNumber, orderData);
-
-  // Configurar número de copias y sus nombres
-  const copies = [
-    "CLIENTE", // Primera copia
-    "COCINA", // Segunda copia
-    // Agrega más si necesitas: 'CAJA', 'MESERO', etc.
+function initializeTestData() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  createSheetIfNotExists('Categorías', ['ID', 'Nombre', 'Fecha Creación']);
+  createSheetIfNotExists('Productos', ['ID', 'Nombre', 'Categoría', 'Precio', 'Descripción', 'Fecha Creación']);
+  createSheetIfNotExists('Órdenes', ['Número Orden', 'Fecha', 'Cliente', 'Tipo', 'Direccion', 'Valor Domicilio', 'Pago', 'Total', 'Subtotal', 'Estado']);
+  createSheetIfNotExists('Detalle_Órdenes', ['Número Orden', 'Producto', 'Cantidad', 'Precio Unitario', 'Subtotal', 'Notas']);
+
+  const categoriesSheet = ss.getSheetByName('Categorías');
+  const categories = [
+    ['CAT001', 'Salchipapas', new Date()],
+    ['CAT002', 'Perros Calientes', new Date()],
+    ['CAT003', 'Hamburguesas', new Date()],
+    ['CAT004', 'Asados', new Date()],
+    ['CAT005', 'Adicionales', new Date()]
   ];
 
-  // Imprimir cada copia
-  for (let i = 0; i < copies.length; i++) {
-    await printToThermalPrinter(receiptContent, copies[i]);
+  if (categoriesSheet.getLastRow() <= 1) {
+    categoriesSheet.getRange(2, 1, categories.length, 3).setValues(categories);
   }
+
+  const productsSheet = ss.getSheetByName('Productos');
+  const products = [
+    ['PROD001', 'Salchipapa Sencilla', 'Salchipapas', 12000, 'Papas a la francesa, salchicha, queso costeño, papa chongo, lechuga, salsa piña y salsa tártara.', new Date()],
+    ['PROD002', 'Salchipapa Butifarra o Chorizo', 'Salchipapas', 16000, 'Papas a la francesa, chorizo o butifarra, queso costeño, papa chongo, lechuga, salsa piña y salsa tártara.', new Date()],
+    ['PROD003', 'Salchipapa Suiza', 'Salchipapas', 16000, '', new Date()],
+    ['PROD004', 'Salchipapa Suiza Gratinada', 'Salchipapas', 18000, '', new Date()],
+    ['PROD005', 'Salchipapa Mixta', 'Salchipapas', 22000, '', new Date()],
+    ['PROD006', 'Salchicarne', 'Salchipapas', 24000, '', new Date()],
+    ['PROD007', 'Salchipollo', 'Salchipapas', 22000, '', new Date()],
+    ['PROD008', 'Salchicarne-Pollo', 'Salchipapas', 24000, '', new Date()],
+    ['PROD009', 'Salchipapa Para Dos', 'Salchipapas', 26000, '', new Date()],
+    ['PROD010', 'Salchipapa Especial (3 personas)', 'Salchipapas', 32000, '', new Date()],
+    ['PROD011', 'Salvajada (4 personas)', 'Salchipapas', 40000, '', new Date()],
+    ['PROD012', 'Mega Salvajada (6 personas)', 'Salchipapas', 60000, '', new Date()],
+    ['PROD013', 'Perro Sencillo', 'Perros Calientes', 6000, '', new Date()],
+    ['PROD014', 'Perro Gratinado', 'Perros Calientes', 7000, '', new Date()],
+    ['PROD015', 'Perro a la Plancha', 'Perros Calientes', 7000, '', new Date()],
+    ['PROD016', 'Perro Plancha Gratinado', 'Perros Calientes', 8000, '', new Date()],
+    ['PROD017', 'Perro Gemelo', 'Perros Calientes', 8000, '', new Date()],
+    ['PROD018', 'Perro Gemelo Gratinado', 'Perros Calientes', 10000, '', new Date()],
+    ['PROD019', 'Perro Suizo', 'Perros Calientes', 15000, '', new Date()],
+    ['PROD020', 'Perro Suizo en Combo', 'Perros Calientes', 22000, '', new Date()],
+    ['PROD021', 'Perro en Combo', 'Perros Calientes', 14000, '', new Date()],
+    ['PROD022', 'Perropollo', 'Perros Calientes', 13000, '', new Date()],
+    ['PROD023', 'Perro 4 Carnes', 'Perros Calientes', 17000, '', new Date()],
+    ['PROD024', 'Perro Mixto', 'Perros Calientes', 15000, '', new Date()],
+    ['PROD025', 'Butyperro', 'Perros Calientes', 15000, '', new Date()],
+    ['PROD026', 'Choryperro', 'Perros Calientes', 12000, '', new Date()],
+    ['PROD027', 'Miti Suizo', 'Perros Calientes', 10000, '', new Date()],
+    ['PROD028', 'Hamburguesa de Carne', 'Hamburguesas', 14000, 'Carne, pan brioche, queso mozzarella, salsa tártara, salsa piña y vegetales.', new Date()],
+    ['PROD029', 'Hamburguesa Doble Carne', 'Hamburguesas', 18000, '', new Date()],
+    ['PROD030', 'Hamburguesa de Pollo', 'Hamburguesas', 14000, '', new Date()],
+    ['PROD031', 'Hamburguesa en Combo', 'Hamburguesas', 19000, '', new Date()],
+    ['PROD032', 'Hamburguesa Especial', 'Hamburguesas', 20000, '', new Date()],
+    ['PROD033', 'Pechuga Asada', 'Asados', 22000, '', new Date()],
+    ['PROD034', 'Pechuga Gratinada', 'Asados', 24000, '', new Date()],
+    ['PROD035', 'Porción de Papas', 'Adicionales', 6000, '', new Date()],
+    ['PROD036', 'Queso Mozzarella', 'Adicionales', 5000, '', new Date()],
+    ['PROD037', 'Salchicha Suiza', 'Adicionales', 8000, '', new Date()]
+  ];
+
+  if (productsSheet.getLastRow() <= 1) {
+    productsSheet.getRange(2, 1, products.length, 6).setValues(products);
+  }
+
+  Logger.log('✅ Datos cargados: ' + categories.length + ' categorías, ' + products.length + ' productos');
 }
 
-function generateReceiptContent(orderNumber, orderData) {
-  const {
-    customerName,
-    orderType,
-    address,
-    deliveryCharge,
-    paymentMethod,
-    items,
-    subtotal,
-    total,
-    date,
-  } = orderData;
-  const now = new Date(date);
-  const formattedDate = now.toLocaleDateString("es-CO", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-  const formattedTime = now.toLocaleTimeString("es-CO", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
+function createSheetIfNotExists(name, headers) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(name);
 
-  // Función para centrar texto (48 caracteres para papel 80mm)
-  const center = (text) => {
-    const len = text.length;
-    const padding = Math.max(0, Math.floor((48 - len) / 2));
-    return " ".repeat(padding) + text;
-  };
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+  }
 
-  let content = `
-${center("CHARLIE FAST FOOD")}
-${"=".repeat(48)}
-CLL 5A #1 C SUR - 48, Bellavista
-Tel: 324 2749206
-@charliefastfood
-${"=".repeat(48)}
+  if (sheet.getLastRow() === 0) {
+    const headerRange = sheet.getRange(1, 1, 1, headers.length);
+    headerRange.setValues([headers]);
+    headerRange.setBackground('#FFD700');
+    headerRange.setFontWeight('bold');
+    headerRange.setFontColor('#000000');
+  }
 
-Factura: ${String(orderNumber).padStart(3, "0")}
-Fecha: ${formattedDate} ${formattedTime}
-Cliente: ${customerName}
-Tipo: ${orderType.toUpperCase()}
-${address ? "Dirección: " + address : ""}
-Pago: ${paymentMethod}
+  return sheet;
+}
 
-${"=".repeat(48)}
-PRODUCTOS
-${"=".repeat(48)}
+// ===================================
+// CATEGORÍAS
+// ===================================
 
-`;
+function getCategories() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Categorías');
+  const lastRow = sheet.getLastRow();
 
-  items.forEach((item) => {
-    content += `${item.name}\n`;
-    const qtyPrice = `${item.quantity} x ${formatPrice(item.price)}`;
-    const itemTotal = formatPrice(item.price * item.quantity);
-    content += `${qtyPrice}${" ".repeat(
-      48 - qtyPrice.length - itemTotal.length
-    )}${itemTotal}\n`;
-    if (item.notes) {
-      item.notes.split(",").forEach((note) => {
-        content += `  * ${note.trim()}\n`;
-      });
+  if (lastRow <= 1) return [];
+
+  const data = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
+
+  return data.map(row => ({
+    id: row[0],
+    name: row[1],
+    createdAt: row[2]
+  }));
+}
+
+function createCategory(data) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Categorías');
+  const id = 'CAT' + Utilities.getUuid().substring(0, 8);
+
+  sheet.appendRow([id, data.name, new Date()]);
+
+  return { success: true, id: id };
+}
+
+function updateCategory(data) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Categorías');
+  const dataRange = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < dataRange.length; i++) {
+    if (dataRange[i][0] === data.id) {
+      sheet.getRange(i + 1, 2).setValue(data.name);
+      return { success: true };
     }
-    content += `\n`;
-  });
-
-  content += `${"=".repeat(48)}\n`;
-  content += `Subtotal:${" ".repeat(
-    38 - formatPrice(subtotal).length
-  )}${formatPrice(subtotal)}\n`;
-  if (deliveryCharge > 0) {
-    content += `Domicilio:${" ".repeat(
-      37 - formatPrice(deliveryCharge).length
-    )}${formatPrice(deliveryCharge)}\n`;
   }
-  content += `TOTAL:${" ".repeat(41 - formatPrice(total).length)}${formatPrice(
-    total
-  )}\n`;
-  content += `${"=".repeat(48)}\n\n`;
-  content += `${center("¡Gracias por su compra!")}\n`;
-  content += `${center("Vuelve pronto")}\n\n\n`;
 
-  return content;
+  return { success: false, error: 'Categoría no encontrada' };
 }
 
-async function printToThermalPrinter(content, copy) {
+function deleteCategory(data) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Categorías');
+  const dataRange = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < dataRange.length; i++) {
+    if (dataRange[i][0] === data.id) {
+      sheet.deleteRow(i + 1);
+      return { success: true };
+    }
+  }
+
+  return { success: false, error: 'Categoría no encontrada' };
+}
+
+// ===================================
+// PRODUCTOS
+// ===================================
+
+function getProducts() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Productos');
+  const lastRow = sheet.getLastRow();
+
+  if (lastRow <= 1) return [];
+
+  const data = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
+
+  return data.map(row => ({
+    id: row[0],
+    name: row[1],
+    category: row[2],
+    price: row[3],
+    description: row[4],
+    createdAt: row[5]
+  }));
+}
+
+function createProduct(data) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Productos');
+  const id = 'PROD' + Utilities.getUuid().substring(0, 8);
+
+  sheet.appendRow([
+    id,
+    data.name,
+    data.category,
+    data.price,
+    data.description || '',
+    new Date()
+  ]);
+
+  return { success: true, id: id };
+}
+
+function updateProduct(data) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Productos');
+  const dataRange = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < dataRange.length; i++) {
+    if (dataRange[i][0] === data.id) {
+      sheet.getRange(i + 1, 2, 1, 4).setValues([[
+        data.name,
+        data.category,
+        data.price,
+        data.description || ''
+      ]]);
+      return { success: true };
+    }
+  }
+
+  return { success: false, error: 'Producto no encontrado' };
+}
+
+function deleteProduct(data) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Productos');
+  const dataRange = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < dataRange.length; i++) {
+    if (dataRange[i][0] === data.id) {
+      sheet.deleteRow(i + 1);
+      return { success: true };
+    }
+  }
+
+  return { success: false, error: 'Producto no encontrado' };
+}
+
+// ===================================
+// ÓRDENES
+// ===================================
+
+
+function createOrder(data) {
+  const ordersSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Órdenes');
+  const detailsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Detalle_Órdenes');
+  const orderNumber = ordersSheet.getLastRow();
+
+  ordersSheet.appendRow([
+    orderNumber,
+    new Date(),
+    data.customerName,
+    data.orderType,
+    data.address || '',           // NUEVO
+    data.deliveryCharge || 0,     // NUEVO
+    data.paymentMethod || 'Efectivo', // NUEVO
+    data.subtotal || data.total,   // NUEVO
+    data.total,
+    'Completada'
+  ]);
+
+  data.items.forEach(item => {
+    detailsSheet.appendRow([
+      orderNumber,
+      item.name,
+      item.quantity,
+      item.price,
+      item.price * item.quantity,
+      item.notes || ''
+    ]);
+  });
+
+  return { success: true, orderNumber: orderNumber };
+}
+
+
+
+// AGREGAR AL FINAL de tu appscript.gs actual
+
+function validateLogin(data) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Configuración');
+  const configData = sheet.getDataRange().getValues();
+  let adminUser, adminPassword;
+  for (let i = 1; i < configData.length; i++) {
+    if (configData[i][0] === 'ADMIN_USER') adminUser = configData[i][1];
+    if (configData[i][0] === 'ADMIN_PASSWORD') adminPassword = configData[i][1];
+  }
+  return data.username === adminUser && data.password === adminPassword
+    ? { success: true, message: 'Login exitoso' }
+    : { success: false, message: 'Credenciales incorrectas' };
+}
+
+function getPredefinedNotes() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Notas_Predefinidas');
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return [];
+  return sheet.getRange(2, 1, lastRow - 1, 2).getValues().map(row => ({
+    id: row[0],
+    text: row[1]
+  }));
+}
+
+function addPredefinedNote(data) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Notas_Predefinidas');
+  const id = 'NOTA' + Date.now().toString().slice(-6);
+  sheet.appendRow([id, data.text]);
+  return { success: true, id: id };
+}
+
+function deletePredefinedNote(data) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Notas_Predefinidas');
+  const dataRange = sheet.getDataRange().getValues();
+  for (let i = 1; i < dataRange.length; i++) {
+    if (dataRange[i][0] === data.id) {
+      sheet.deleteRow(i + 1);
+      return { success: true };
+    }
+  }
+  return { success: false, error: 'Nota no encontrada' };
+}
+
+/**
+ * Devuelve las órdenes aplicando filtros opcionales.
+ * Reemplaza cualquier otra implementación de getOrders en tu archivo.
+ */
+function getOrders(filters) {
   try {
-    // Agregar encabezado de copia
-    const fullContent = `\n${copy}\n${"-".repeat(48)}\n${content}`;
+    Logger.log("getOrders llamado con filters: %s", JSON.stringify(filters));
 
-    // Abrir ventana de impresión
-    const printWindow = window.open("", "_blank", "width=300,height=600");
-    printWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <title>Factura - ${copy}</title>
-                <style>
-                    * {
-                        margin: 0;
-                        padding: 0;
-                        box-sizing: border-box;
-                    }
-                    
-                    @page {
-                        size: 80mm auto;
-                        margin: 0;
-                    }
-                    
-                    body {
-                        font-family: 'Courier New', monospace;
-                        font-size: 11px;
-                        width: 80mm;
-                        margin: 0 auto;
-                        padding: 5mm;
-                        background: white;
-                        color: black;
-                    }
-                    
-                    pre {
-                        font-family: 'Courier New', monospace;
-                        font-size: 11px;
-                        white-space: pre-wrap;
-                        word-wrap: break-word;
-                        margin: 0;
-                        line-height: 1.3;
-                    }
-                    
-                    @media print {
-                        body {
-                            width: 80mm;
-                            padding: 2mm;
-                        }
-                        
-                        pre {
-                            font-size: 10px;
-                        }
-                    }
-                    
-                    @media screen {
-                        body {
-                            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-                            margin-top: 10px;
-                        }
-                    }
-                </style>
-            </head>
-            <body>
-                <pre>${fullContent}</pre>
-                <script>
-                    window.onload = function() {
-                        setTimeout(function() {
-                            window.print();
-                            // Cerrar después de imprimir o cancelar
-                            setTimeout(function() {
-                                window.close();
-                            }, 100);
-                        }, 500);
-                    }
-                </script>
-            </body>
-            </html>
-        `);
-    printWindow.document.close();
-  } catch (error) {
-    console.error("Error al imprimir:", error);
-    showToast("Error al imprimir la factura", "error");
-  }
-}
-
-// ===================================
-// ADMINISTRACIÓN - PRODUCTOS
-// ===================================
-
-// --- LOGIN DE ADMINISTRACIÓN --- //
-
-async function loadAdminData() {
-  showLoader(true);
-  await loadProducts();
-  await loadCategories();
-  renderProductsTable();
-  renderCategoriesGrid();
-  updateCategorySelects();
-  showLoader(false);
-}
-
-function renderProductsTable() {
-  const tbody = document.getElementById("productsTableBody");
-
-  if (state.products.length === 0) {
-    tbody.innerHTML =
-      '<tr><td colspan="5" style="text-align:center;">No hay productos registrados</td></tr>';
-    return;
-  }
-
-  tbody.innerHTML = state.products
-    .map(
-      (product) => `
-        <tr>
-            <td>${product.name}</td>
-            <td>${product.category}</td>
-            <td>${formatPrice(product.price)}</td>
-            <td>${product.description || "-"}</td>
-            <td>
-                <div class="action-btns">
-                    <button class="btn-edit" onclick="editProduct('${
-                      product.id
-                    }')">Editar</button>
-                    <button class="btn-delete" onclick="deleteProduct('${
-                      product.id
-                    }')">Eliminar</button>
-                </div>
-            </td>
-        </tr>
-    `
-    )
-    .join("");
-}
-
-function openProductModal(productId = null) {
-  const modal = document.getElementById("modalProduct");
-  const title = document.getElementById("modalProductTitle");
-  const form = document.getElementById("formProduct");
-
-  form.reset();
-  updateCategorySelects();
-
-  if (productId) {
-    const product = state.products.find((p) => p.id === productId);
-    if (product) {
-      title.textContent = "Editar Producto";
-      document.getElementById("productId").value = product.id;
-      document.getElementById("productName").value = product.name;
-      document.getElementById("productCategory").value = product.category;
-      document.getElementById("productPrice").value = product.price;
-      document.getElementById("productDescription").value =
-        product.description || "";
-    }
-  } else {
-    title.textContent = "Nuevo Producto";
-    document.getElementById("productId").value = "";
-  }
-
-  openModal("modalProduct");
-}
-
-function editProduct(productId) {
-  openProductModal(productId);
-}
-
-async function deleteProduct(productId) {
-  if (!confirm("¿Estás seguro de eliminar este producto?")) return;
-
-  showLoader(true);
-  const result = await fetchData("deleteProduct", { id: productId });
-
-  if (result && result.success) {
-    await loadProducts();
-    renderProductsTable();
-    renderProducts();
-    showToast("Producto eliminado correctamente", "success");
-  } else {
-    showToast("Error al eliminar el producto", "error");
-  }
-
-  showLoader(false);
-}
-
-async function saveProduct(e) {
-  e.preventDefault();
-
-  const productData = {
-    id: document.getElementById("productId").value,
-    name: document.getElementById("productName").value.trim(),
-    category: document.getElementById("productCategory").value,
-    price: parseInt(document.getElementById("productPrice").value),
-    description: document.getElementById("productDescription").value.trim(),
-  };
-
-  showLoader(true);
-  const action = productData.id ? "updateProduct" : "createProduct";
-  const result = await fetchData(action, productData);
-
-  if (result && result.success) {
-    await loadProducts();
-    renderProductsTable();
-    renderProducts();
-    renderCategoryFilters();
-    closeModal("modalProduct");
-    showToast(
-      productData.id
-        ? "Producto actualizado correctamente"
-        : "Producto creado correctamente",
-      "success"
-    );
-  } else {
-    showToast("Error al guardar el producto", "error");
-  }
-
-  showLoader(false);
-}
-
-// ===================================
-// ADMINISTRACIÓN - CATEGORÍAS
-// ===================================
-
-function renderCategoriesGrid() {
-  const grid = document.getElementById("categoriesGrid");
-
-  if (state.categories.length === 0) {
-    grid.innerHTML =
-      '<div class="empty-cart"><p>📁</p><span>No hay categorías registradas</span></div>';
-    return;
-  }
-
-  grid.innerHTML = state.categories
-    .map(
-      (category) => `
-        <div class="category-card">
-            <h3>${category.name}</h3>
-            <div class="action-btns">
-                <button class="btn-edit" onclick="editCategory('${category.id}')">Editar</button>
-                <button class="btn-delete" onclick="deleteCategory('${category.id}')">Eliminar</button>
-            </div>
-        </div>
-    `
-    )
-    .join("");
-}
-
-function openCategoryModal(categoryId = null) {
-  const modal = document.getElementById("modalCategory");
-  const title = document.getElementById("modalCategoryTitle");
-  const form = document.getElementById("formCategory");
-
-  form.reset();
-
-  if (categoryId) {
-    const category = state.categories.find((c) => c.id === categoryId);
-    if (category) {
-      title.textContent = "Editar Categoría";
-      document.getElementById("categoryId").value = category.id;
-      document.getElementById("categoryName").value = category.name;
-    }
-  } else {
-    title.textContent = "Nueva Categoría";
-    document.getElementById("categoryId").value = "";
-  }
-
-  openModal("modalCategory");
-}
-
-function editCategory(categoryId) {
-  openCategoryModal(categoryId);
-}
-
-async function deleteCategory(categoryId) {
-  // Verificar si hay productos con esta categoría
-  const hasProducts = state.products.some(
-    (p) =>
-      p.category === state.categories.find((c) => c.id === categoryId)?.name
-  );
-
-  if (hasProducts) {
-    showToast(
-      "No se puede eliminar una categoría con productos asociados",
-      "error"
-    );
-    return;
-  }
-
-  if (!confirm("¿Estás seguro de eliminar esta categoría?")) return;
-
-  showLoader(true);
-  const result = await fetchData("deleteCategory", { id: categoryId });
-
-  if (result && result.success) {
-    await loadCategories();
-    renderCategoriesGrid();
-    renderCategoryFilters();
-    updateCategorySelects();
-    showToast("Categoría eliminada correctamente", "success");
-  } else {
-    showToast("Error al eliminar la categoría", "error");
-  }
-
-  showLoader(false);
-}
-
-async function saveCategory(e) {
-  e.preventDefault();
-
-  const categoryData = {
-    id: document.getElementById("categoryId").value,
-    name: document.getElementById("categoryName").value.trim(),
-  };
-
-  showLoader(true);
-  const action = categoryData.id ? "updateCategory" : "createCategory";
-  const result = await fetchData(action, categoryData);
-
-  if (result && result.success) {
-    await loadCategories();
-    renderCategoriesGrid();
-    renderCategoryFilters();
-    updateCategorySelects();
-    closeModal("modalCategory");
-    showToast(
-      categoryData.id
-        ? "Categoría actualizada correctamente"
-        : "Categoría creada correctamente",
-      "success"
-    );
-  } else {
-    showToast("Error al guardar la categoría", "error");
-  }
-
-  showLoader(false);
-}
-
-function updateCategorySelects() {
-  const select = document.getElementById("productCategory");
-  select.innerHTML =
-    '<option value="">Seleccione una categoría</option>' +
-    state.categories
-      .map((cat) => `<option value="${cat.name}">${cat.name}</option>`)
-      .join("");
-}
-
-// ===================================
-// UTILIDADES
-// ===================================
-
-function formatPrice(price) {
-  return "$" + price.toLocaleString("es-CO");
-}
-
-function showLoader(show) {
-  const loader = document.getElementById("loader");
-  if (show) {
-    loader.classList.add("active");
-  } else {
-    loader.classList.remove("active");
-  }
-}
-
-function openModal(modalId) {
-  document.getElementById(modalId).classList.add("active");
-}
-
-function closeModal(modalId) {
-  document.getElementById(modalId).classList.remove("active");
-}
-
-function openNotesModal(product) {
-  document.getElementById("notesProductName").textContent = product.name;
-  document.getElementById("productNotes").value = "";
-  openModal("modalNotes");
-}
-
-function showToast(message, type = "success") {
-  const container = document.getElementById("toastContainer");
-  const toast = document.createElement("div");
-  toast.className = `toast ${type}`;
-
-  const icon = type === "success" ? "✓" : "✕";
-
-  toast.innerHTML = `
-        <span class="toast-icon">${icon}</span>
-        <span class="toast-message">${message}</span>
-    `;
-
-  container.appendChild(toast);
-
-  setTimeout(() => {
-    toast.style.animation = "slideInRight 0.3s ease reverse";
-    setTimeout(() => toast.remove(), 300);
-  }, 3000);
-}
-
-// Cerrar modales al hacer clic fuera
-window.onclick = function (event) {
-  if (event.target.classList.contains("modal")) {
-    event.target.classList.remove("active");
-  }
-};
-
-// AGREGAR AL FINAL DE app.js
-
-// Estado para login
-let isAdminLoggedIn = false;
-
-// Cargar notas predefinidas
-async function loadPredefinedNotes() {
-  const result = await fetchData("getPredefinedNotes");
-  if (result && result.success) {
-    state.predefinedNotes = result.data;
-  }
-}
-
-// Cargar órdenes con filtros
-async function loadOrdersAdmin() {
-  const dateValue = document.getElementById("filterDate").value;
-  const paymentMethod = document.getElementById("filterPayment").value;
-
-  let filters = {
-    paymentMethod,
-  };
-
-  // Si se seleccionó una fecha, crea un rango de inicio y fin para ese día.
-  if (dateValue) {
-    // La fecha del input (ej: "2025-11-23") se interpreta en la zona horaria local.
-    const dateStart = new Date(dateValue);
-    dateStart.setHours(0, 0, 0, 0); // Inicio del día: 00:00:00
-
-    const dateEnd = new Date(dateValue);
-    dateEnd.setHours(23, 59, 59, 999); // Fin del día: 23:59:59.999
-
-    // Enviamos las fechas en formato ISO, que es estándar y fácil de parsear en el backend.
-    filters.dateStart = dateStart.toISOString();
-    filters.dateEnd = dateEnd.toISOString();
-  }
-
-  showLoader(true);
-  // Enviamos el objeto de filtros completo.
-  const result = await fetchData("getOrders", { filters });
-  showLoader(false);
-
-  if (result && result.success) {
-    renderOrdersTable(result.data);
-  }
-}
-
-// Mostrar tabla de órdenes - VERSIÓN CORREGIDA
-function renderOrdersTable(orders) {
-  const tbody = document.getElementById("ordersTableBody");
-
-  console.log("📊 Renderizando órdenes:", orders);
-
-  if (!orders || orders.length === 0) {
-    tbody.innerHTML =
-      '<tr><td colspan="8" style="text-align:center; padding: 40px; color: var(--gray-medium);">No hay órdenes para mostrar</td></tr>';
-    return;
-  }
-
-  tbody.innerHTML = orders
-    .map((order) => {
-      // Formatear fecha
-      let formattedDate = "";
+    // Asegurar que 'filters' sea un objeto, incluso si llega como string
+    if (typeof filters === "string") {
       try {
-        const dateValue = order.rawDate || order.date; // <- AHORA SÍ
-        if (dateValue) {
-          const dateObj =
-            dateValue instanceof Date ? dateValue : new Date(dateValue);
-          formattedDate = dateObj.toLocaleString("es-CO", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-        }
-      } catch (e) {
-        formattedDate = order.rawDate || "-";
+        filters = JSON.parse(filters);
+      } catch (err) {
+        filters = {};
+      }
+    }
+    filters = filters || {};
+
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Órdenes');
+    if (!sheet) {
+      Logger.log("Hoja 'Órdenes' no encontrada");
+      return [];
+    }
+
+    const dataRange = sheet.getDataRange();
+    const allData = dataRange.getValues();
+
+    if (allData.length <= 1) return [];
+
+    const headers = allData.shift(); // Quita la fila de encabezados
+
+    // Preparar filtros
+    const dateStart = filters.dateStart ? new Date(filters.dateStart) : null;
+    const dateEnd = filters.dateEnd ? new Date(filters.dateEnd) : null;
+    const filterPayment = (filters.paymentMethod || "").trim();
+
+    Logger.log("Aplicando filtros -> Fecha Inicio: %s, Fecha Fin: %s, Pago: %s", dateStart, dateEnd, filterPayment);
+
+    const filteredOrders = allData.map((row, index) => {
+      // Guardamos el número de fila original (index + 2 porque quitamos encabezados y las filas empiezan en 1)
+      return { data: row, originalRowIndex: index + 2 };
+    }).filter(item => {
+      const row = item.data;
+      const orderDate = new Date(row[1]); // Columna B: Fecha
+      const paymentMethod = (row[6] || "").toString(); // Columna G: Pago
+
+      let dateMatch = true;
+      if (dateStart && dateEnd) {
+        dateMatch = orderDate >= dateStart && orderDate <= dateEnd;
       }
 
-      return `
-        <tr>
-            <td><strong>${String(order.orderNumber || 0).padStart(3, "0")}</strong></td>
-            <td>${formattedDate}</td>
-            <td>${order.customer || "-"}</td>
-            <td>
-              <span style="background: ${
-                order.type === "domicilio"
-                  ? "var(--primary-orange)"
-                  : "var(--primary-yellow)"
-              }; 
-              color: var(--dark-bg); padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">
-                ${(order.type || "local").toUpperCase()}
-              </span>
-            </td>
-            <td>${order.address || "-"}</td>
-            <td>
-              <span style="background: ${
-                order.paymentMethod === "Efectivo" ? "#22c55e" : "#3b82f6"
-              }; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">
-                ${order.paymentMethod || "Efectivo"}
-              </span>
-            </td>
-            <td style="font-weight: 700; color: var(--primary-yellow);">${formatPrice(
-              order.total || 0
-            )}</td>
-            <td>
-                <div class="action-btns">
-                    <button class="btn-delete" onclick="deleteOrderAdmin(${
-                      order.orderNumber
-                    }, ${order.rowIndex})">
-                        Eliminar
-                    </button>
-                </div>
-            </td>
-        </tr>
-      `;
-    })
-    .join("");
-}
+      let paymentMatch = true;
+      if (filterPayment && filterPayment !== "all") {
+        paymentMatch = paymentMethod.toLowerCase() === filterPayment.toLowerCase();
+      }
 
-
-// Función auxiliar para formatear fecha de orden
-function formatOrderDate(dateStr) {
-  try {
-    // Si ya es formato YYYY-MM-DD
-    if (typeof dateStr === 'string' && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      const [year, month, day] = dateStr.split('-');
-      return `${day}/${month}/${year}`;
-    }
-    
-    // Si es objeto Date
-    if (dateStr instanceof Date) {
-      return dateStr.toLocaleDateString("es-CO", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric"
-      });
-    }
-    
-    // Si es string con formato DD/MM/YYYY
-    if (typeof dateStr === 'string' && dateStr.includes('/')) {
-      return dateStr.split(' ')[0]; // Remover hora si existe
-    }
-    
-    // Intentar parsear como fecha
-    const date = new Date(dateStr);
-    if (!isNaN(date.getTime())) {
-      return date.toLocaleDateString("es-CO", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric"
-      });
-    }
-    
-    return dateStr;
-  } catch (error) {
-    console.error('Error al formatear fecha:', error);
-    return dateStr;
-  }
-}
-
-// Eliminar orden
-async function deleteOrderAdmin(orderNumber, rowIndex) {
-  if (!confirm("¿Eliminar esta orden?")) return;
-
-  showLoader(true);
-  const result = await fetchData("deleteOrder", { orderNumber, rowIndex });
-  showLoader(false);
-
-  if (result && result.success) {
-    loadOrdersAdmin();
-    showToast("Orden eliminada", "success");
-  }
-}
-
-// Inicializar al cargar
-document.addEventListener("DOMContentLoaded", async () => {
-  await initializeApp();
-  await loadPredefinedNotes();
-
-  // Evento para tipo de orden
-  document.querySelectorAll('input[name="orderType"]').forEach((radio) => {
-    radio.addEventListener("change", (e) => {
-      const deliveryFields = document.getElementById("deliveryFields");
-      deliveryFields.style.display =
-        e.target.value === "domicilio" ? "block" : "none";
+      return dateMatch && paymentMatch;
     });
-  });
 
-  // Vista por defecto
-  switchView("orden");
-});
-
-// --- FUNCIONAMIENTO DE LAS PESTAÑAS (TABS) DEL ADMIN --- //
-document.querySelectorAll(".tab-btn").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document
-      .querySelectorAll(".tab-btn")
-      .forEach((b) => b.classList.remove("active"));
-    document
-      .querySelectorAll(".tab-content")
-      .forEach((tab) => tab.classList.remove("active"));
-
-    btn.classList.add("active");
-
-    const tabId = btn.dataset.tab; // productos, categorias u ordenes
-    document
-      .getElementById("tab" + tabId.charAt(0).toUpperCase() + tabId.slice(1))
-      .classList.add("active");
-  });
-});
-
-window.addEventListener("load", () => {
-  if (typeof loadOrdersAdmin === "function") {
-    loadOrdersAdmin();
+    // Mapear los datos filtrados al formato que espera el frontend
+    return filteredOrders.map(item => ({
+      rowIndex: item.originalRowIndex, // ¡Importante para poder eliminar!
+      orderNumber: item.data[0],
+      rawDate: item.data[1],
+      customer: item.data[2],
+      type: item.data[3],
+      address: item.data[4],
+      paymentMethod: item.data[6],
+      total: item.data[8],
+    }));
+  } catch (err) {
+    Logger.log("Error en getOrders: %s", err.toString());
+    return [];
   }
-});ss
+}
+
+
+function updateOrder(data) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Órdenes');
+  sheet.getRange(data.rowIndex, 3, 1, 7).setValues([[
+    data.customer,
+    data.type,
+    data.address || '',
+    data.deliveryCharge || 0,
+    data.paymentMethod,
+    data.subtotal,
+    data.total
+  ]]);
+  return { success: true };
+}
+
+
+
+function deleteOrder(data) {
+  const ordersSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Órdenes');
+  const detailsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Detalle_Órdenes');
+
+  // Eliminar detalles
+  const detailsData = detailsSheet.getDataRange().getValues();
+  for (let i = detailsData.length - 1; i >= 1; i--) {
+    if (detailsData[i][0] === data.orderNumber) {
+      detailsSheet.deleteRow(i + 1);
+    }
+  }
+
+  // Eliminar orden
+  ordersSheet.deleteRow(data.rowIndex);
+  return { success: true };
+}
+
+function parseSheetDate(value) {
+  if (value instanceof Date) {
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, "0");
+    const d = String(value.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  if (typeof value === "string") {
+    const datePart = value.split(" ")[0]; // "13/11/2025" de "13/11/2025 22:22:53"
+    const parts = datePart.split("/");    // ["13","11","2025"]
+
+    if (parts.length === 3) {
+      const d = parts[0];
+      const m = parts[1];
+      const y = parts[2];
+      return `${y}-${m}-${d}`;
+    }
+  }
+
+  return "";
+}
+
+function createConfigSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName('Configuración');
+  if (!sheet) sheet = ss.insertSheet('Configuración');
+
+  sheet.clear();
+  sheet.appendRow(['ADMIN_USER', 'admin']);
+  sheet.appendRow(['ADMIN_PASSWORD', 'charlie2025']);
+}
