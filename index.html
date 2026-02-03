@@ -87,7 +87,6 @@
                     <span>Domicilio</span>
                   </label>
                 </div>
-                <!-- DESPUÉS de los radio buttons Local/Domicilio, AGREGAR: -->
 
                 <div id="deliveryFields" style="display: none">
                   <input
@@ -152,16 +151,56 @@
       <!-- Vista de Administración -->
       <div class="view hidden" id="vistaAdmin">
         <div class="container">
-          <div class="admin-layout">
+          <!-- Formulario de Login -->
+          <div id="loginForm" class="login-container">
+            <div class="login-box">
+              <h2>🔐 Acceso Administrador</h2>
+              <form id="formLogin" class="login-form">
+                <div class="form-group">
+                  <label>Usuario</label>
+                  <input
+                    type="text"
+                    id="loginUsername"
+                    class="input-field"
+                    placeholder="Ingrese usuario"
+                    required
+                    autocomplete="off"
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Contraseña</label>
+                  <input
+                    type="password"
+                    id="loginPassword"
+                    class="input-field"
+                    placeholder="Ingrese contraseña"
+                    required
+                    autocomplete="off"
+                  />
+                </div>
+                <button type="submit" class="btn-primary btn-large">
+                  Iniciar Sesión
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <!-- Contenido Admin (oculto hasta login) -->
+          <div id="adminContent" class="admin-layout" style="display: none;">
+            <div class="admin-header-with-logout">
+              <h2></h2>
+              <button class="btn-logout" id="btnLogout">
+                🚪 Cerrar Sesión
+              </button>
+            </div>
+
             <div class="admin-tabs">
               <button class="tab-btn active" data-tab="productos">
                 Productos
               </button>
               <button class="tab-btn" data-tab="categorias">Categorías</button>
               <button class="tab-btn" data-tab="ordenes">Órdenes</button>
-              <!-- AGREGAR ESTA LÍNEA -->
             </div>
-
 
             <!-- Tab de Productos -->
             <div class="tab-content active" id="tabProductos">
@@ -201,57 +240,54 @@
                 <!-- Las categorías se cargarán dinámicamente -->
               </div>
             </div>
-            <!-- Tab de Órdenes - AGREGAR TODO ESTO -->
-            <div class="tab-content" id="tabOrdenes">
-              
 
-              <div id="adminContent" style="display: block">
-                <div class="admin-header">
-                  <h2>Gestión de Órdenes</h2>
-                  <div style="display: flex; gap: 10px">
-                    <input
-                      type="date"
-                      id="filterDate"
-                      class="input-field"
-                      style="width: 160px"
-                    />
-                    <select
-                      id="filterPayment"
-                      class="input-field"
-                      style="width: 160px"
-                    >
-                      <option value="all">Todos los pagos</option>
-                      <option value="Efectivo">Efectivo</option>
-                      <option value="Transferencia">Transferencia</option>
-                    </select>
-                    <button onclick="loadOrdersAdmin()" class="btn-primary">
-                      Filtrar
-                    </button>
-                  </div>
+            <!-- Tab de Órdenes -->
+            <div class="tab-content" id="tabOrdenes">
+              <div class="admin-header">
+                <h2>Gestión de Órdenes</h2>
+                <div style="display: flex; gap: 10px">
+                  <input
+                    type="date"
+                    id="filterDate"
+                    class="input-field"
+                    style="width: 160px"
+                  />
+                  <select
+                    id="filterPayment"
+                    class="input-field"
+                    style="width: 160px"
+                  >
+                    <option value="all">Todos los pagos</option>
+                    <option value="Efectivo">Efectivo</option>
+                    <option value="Transferencia">Transferencia</option>
+                  </select>
+                  <button onclick="loadOrdersAdmin()" class="btn-primary">
+                    Filtrar
+                  </button>
                 </div>
-                <div class="admin-table-container">
-                  <table class="admin-table">
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>Fecha</th>
-                        <th>Cliente</th>
-                        <th>Tipo</th>
-                        <th>Dirección</th>
-                        <th>Pago</th>
-                        <th>Total</th>
-                        <th>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody id="ordersTableBody">
-                      <tr>
-                        <td colspan="8" style="text-align: center">
-                          Cargando...
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+              </div>
+              <div class="admin-table-container">
+                <table class="admin-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Fecha</th>
+                      <th>Cliente</th>
+                      <th>Tipo</th>
+                      <th>Dirección</th>
+                      <th>Pago</th>
+                      <th>Total</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="ordersTableBody">
+                    <tr>
+                      <td colspan="8" style="text-align: center">
+                        Cargando...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -378,7 +414,6 @@
     <!-- Toast Notifications -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <!-- La etiqueta SCRIPT debe ir JUSTO ANTES de cerrar el body -->
     <script src="app.js"></script>
   </body>
 </html>
