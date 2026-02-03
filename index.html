@@ -5,20 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Charlie Fast Food - POS</title>
     <link rel="stylesheet" href="styles.css" />
-    <style>
-      /* Accesibilidad: Labels ocultas visualmente pero accesibles para lectores de pantalla */
-      .visually-hidden {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        border-width: 0;
-      }
-    </style>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -77,20 +63,16 @@
                 <button class="btn-clear" id="btnClearCart">Limpiar</button>
               </div>
 
-              <!-- ✅ CORRECCIÓN: Información del Cliente dentro de un FORM -->
-              <form class="customer-info" id="orderForm">
-                <label for="customerName" class="visually-hidden">Nombre del cliente</label>
+              <!-- Información del Cliente -->
+              <div class="customer-info">
                 <input
                   type="text"
                   id="customerName"
-                  name="customerName"
                   placeholder="Nombre del cliente"
                   class="input-field"
                   required
                 />
-                
-                <fieldset class="order-type">
-                  <legend class="visually-hidden">Tipo de orden</legend>
+                <div class="order-type">
                   <label class="radio-label">
                     <input
                       type="radio"
@@ -104,30 +86,26 @@
                     <input type="radio" name="orderType" value="domicilio" />
                     <span>Domicilio</span>
                   </label>
-                </fieldset>
+                </div>
+                <!-- DESPUÉS de los radio buttons Local/Domicilio, AGREGAR: -->
 
                 <div id="deliveryFields" style="display: none">
-                  <label for="deliveryAddress" class="visually-hidden">Dirección de entrega</label>
                   <input
                     type="text"
                     id="deliveryAddress"
-                    name="deliveryAddress"
                     placeholder="Dirección de entrega"
                     class="input-field"
                   />
-                  <label for="deliveryCharge" class="visually-hidden">Valor domicilio</label>
                   <input
                     type="number"
                     id="deliveryCharge"
-                    name="deliveryCharge"
                     placeholder="Valor domicilio"
                     class="input-field"
                     value="2000"
                   />
                 </div>
 
-                <fieldset class="payment-methods" style="margin-top: 10px">
-                  <legend class="visually-hidden">Método de pago</legend>
+                <div class="payment-methods" style="margin-top: 10px">
                   <label class="radio-label">
                     <input
                       type="radio"
@@ -145,14 +123,14 @@
                     />
                     <span>Transferencia</span>
                   </label>
-                </fieldset>
-              </form>
+                </div>
+              </div>
 
               <!-- Items del Carrito -->
               <div class="cart-items" id="cartItems">
                 <div class="empty-cart">
-                  <p>🛒</p>
-                  <span>Carrito vacío</span>
+                  <p>🛒 Carrito vacío</p>
+                  <span>Agrega productos para comenzar</span>
                 </div>
               </div>
 
@@ -162,7 +140,7 @@
                   <span class="total-label">Total:</span>
                   <span class="total-amount" id="totalAmount">$0</span>
                 </div>
-                <button type="button" class="btn-primary btn-large" id="btnProcessOrder">
+                <button class="btn-primary btn-large" id="btnProcessOrder">
                   Procesar Orden
                 </button>
               </div>
@@ -174,58 +152,16 @@
       <!-- Vista de Administración -->
       <div class="view hidden" id="vistaAdmin">
         <div class="container">
-          <!-- Formulario de Login -->
-          <div id="loginForm" class="login-container">
-            <div class="login-box">
-              <h2>🔐 Acceso Administrador</h2>
-              <form id="formLogin" class="login-form">
-                <div class="form-group">
-                  <label for="loginUsername">Usuario</label>
-                  <input
-                    type="text"
-                    id="loginUsername"
-                    name="loginUsername"
-                    class="input-field"
-                    placeholder="Ingrese usuario"
-                    required
-                    autocomplete="username"
-                  />
-                </div>
-                <div class="form-group">
-                  <label for="loginPassword">Contraseña</label>
-                  <input
-                    type="password"
-                    id="loginPassword"
-                    name="loginPassword"
-                    class="input-field"
-                    placeholder="Ingrese contraseña"
-                    required
-                    autocomplete="current-password"
-                  />
-                </div>
-                <button type="submit" class="btn-primary btn-large">
-                  Iniciar Sesión
-                </button>
-              </form>
-            </div>
-          </div>
-
-          <!-- Contenido Admin (oculto hasta login) -->
-          <div id="adminContent" class="admin-layout" style="display: none;">
-            <div class="admin-header-with-logout">
-              <h2></h2>
-              <button class="btn-logout" id="btnLogout">
-                🚪 Cerrar Sesión
-              </button>
-            </div>
-
+          <div class="admin-layout">
             <div class="admin-tabs">
               <button class="tab-btn active" data-tab="productos">
                 Productos
               </button>
               <button class="tab-btn" data-tab="categorias">Categorías</button>
               <button class="tab-btn" data-tab="ordenes">Órdenes</button>
+              <!-- AGREGAR ESTA LÍNEA -->
             </div>
+
 
             <!-- Tab de Productos -->
             <div class="tab-content active" id="tabProductos">
@@ -265,58 +201,57 @@
                 <!-- Las categorías se cargarán dinámicamente -->
               </div>
             </div>
-
-            <!-- Tab de Órdenes -->
+            <!-- Tab de Órdenes - AGREGAR TODO ESTO -->
             <div class="tab-content" id="tabOrdenes">
-              <div class="admin-header">
-                <h2>Gestión de Órdenes</h2>
-                <div style="display: flex; gap: 10px">
-                  <label for="filterDate" class="visually-hidden">Filtrar por fecha</label>
-                  <input
-                    type="date"
-                    id="filterDate"
-                    name="filterDate"
-                    class="input-field"
-                    style="width: 160px"
-                  />
-                  <label for="filterPayment" class="visually-hidden">Filtrar por método de pago</label>
-                  <select
-                    id="filterPayment"
-                    name="filterPayment"
-                    class="input-field"
-                    style="width: 160px"
-                  >
-                    <option value="all">Todos los pagos</option>
-                    <option value="Efectivo">Efectivo</option>
-                    <option value="Transferencia">Transferencia</option>
-                  </select>
-                  <button type="button" onclick="loadOrdersAdmin()" class="btn-primary">
-                    Filtrar
-                  </button>
+              
+
+              <div id="adminContent" style="display: block">
+                <div class="admin-header">
+                  <h2>Gestión de Órdenes</h2>
+                  <div style="display: flex; gap: 10px">
+                    <input
+                      type="date"
+                      id="filterDate"
+                      class="input-field"
+                      style="width: 160px"
+                    />
+                    <select
+                      id="filterPayment"
+                      class="input-field"
+                      style="width: 160px"
+                    >
+                      <option value="all">Todos los pagos</option>
+                      <option value="Efectivo">Efectivo</option>
+                      <option value="Transferencia">Transferencia</option>
+                    </select>
+                    <button onclick="loadOrdersAdmin()" class="btn-primary">
+                      Filtrar
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div class="admin-table-container">
-                <table class="admin-table">
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Fecha</th>
-                      <th>Cliente</th>
-                      <th>Tipo</th>
-                      <th>Dirección</th>
-                      <th>Pago</th>
-                      <th>Total</th>
-                      <th>Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody id="ordersTableBody">
-                    <tr>
-                      <td colspan="8" style="text-align: center">
-                        Cargando...
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                <div class="admin-table-container">
+                  <table class="admin-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Fecha</th>
+                        <th>Cliente</th>
+                        <th>Tipo</th>
+                        <th>Dirección</th>
+                        <th>Pago</th>
+                        <th>Total</th>
+                        <th>Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody id="ordersTableBody">
+                      <tr>
+                        <td colspan="8" style="text-align: center">
+                          Cargando...
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
@@ -329,28 +264,27 @@
       <div class="modal-content">
         <div class="modal-header">
           <h3 id="modalProductTitle">Nuevo Producto</h3>
-          <button type="button" class="modal-close" onclick="closeModal('modalProduct')">
+          <button class="modal-close" onclick="closeModal('modalProduct')">
             &times;
           </button>
         </div>
         <form id="formProduct" class="modal-form">
-          <input type="hidden" id="productId" name="productId" />
+          <input type="hidden" id="productId" />
           <div class="form-group">
-            <label for="productName">Nombre del Producto *</label>
-            <input type="text" id="productName" name="productName" required class="input-field" />
+            <label>Nombre del Producto *</label>
+            <input type="text" id="productName" required class="input-field" />
           </div>
           <div class="form-group">
-            <label for="productCategory">Categoría *</label>
-            <select id="productCategory" name="productCategory" required class="input-field">
+            <label>Categoría *</label>
+            <select id="productCategory" required class="input-field">
               <option value="">Seleccione una categoría</option>
             </select>
           </div>
           <div class="form-group">
-            <label for="productPrice">Precio *</label>
+            <label>Precio *</label>
             <input
               type="number"
               id="productPrice"
-              name="productPrice"
               required
               class="input-field"
               min="0"
@@ -358,10 +292,9 @@
             />
           </div>
           <div class="form-group">
-            <label for="productDescription">Descripción</label>
+            <label>Descripción</label>
             <textarea
               id="productDescription"
-              name="productDescription"
               class="input-field"
               rows="3"
             ></textarea>
@@ -385,15 +318,15 @@
       <div class="modal-content">
         <div class="modal-header">
           <h3 id="modalCategoryTitle">Nueva Categoría</h3>
-          <button type="button" class="modal-close" onclick="closeModal('modalCategory')">
+          <button class="modal-close" onclick="closeModal('modalCategory')">
             &times;
           </button>
         </div>
         <form id="formCategory" class="modal-form">
-          <input type="hidden" id="categoryId" name="categoryId" />
+          <input type="hidden" id="categoryId" />
           <div class="form-group">
-            <label for="categoryName">Nombre de la Categoría *</label>
-            <input type="text" id="categoryName" name="categoryName" required class="input-field" />
+            <label>Nombre de la Categoría *</label>
+            <input type="text" id="categoryName" required class="input-field" />
           </div>
           <div class="modal-actions">
             <button
@@ -414,16 +347,14 @@
       <div class="modal-content modal-small">
         <div class="modal-header">
           <h3>Agregar Notas</h3>
-          <button type="button" class="modal-close" onclick="closeModal('modalNotes')">
+          <button class="modal-close" onclick="closeModal('modalNotes')">
             &times;
           </button>
         </div>
         <div class="modal-body">
           <p class="product-name-modal" id="notesProductName"></p>
-          <label for="productNotes" class="visually-hidden">Notas del producto</label>
           <textarea
             id="productNotes"
-            name="productNotes"
             class="input-field"
             rows="4"
             placeholder="Ej: Sin lechuga, extra queso..."
@@ -447,6 +378,7 @@
     <!-- Toast Notifications -->
     <div class="toast-container" id="toastContainer"></div>
 
+    <!-- La etiqueta SCRIPT debe ir JUSTO ANTES de cerrar el body -->
     <script src="app.js"></script>
   </body>
 </html>
